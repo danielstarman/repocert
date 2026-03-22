@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::exec::{CommandRunnerOptions, CommandRunnerStatus, run_command};
-use crate::git_status::{capture_snapshot, protected_pathspecs};
+use crate::git::{capture_snapshot, protected_pathspecs};
 
 use super::plan::PlannedFixer;
 use super::types::{FixItemResult, FixOutcome};
