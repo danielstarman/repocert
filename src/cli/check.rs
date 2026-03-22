@@ -1,7 +1,6 @@
-use std::path::Path;
 use std::process::ExitCode;
 
-use serde_json::json;
+use serde_json::{Map, Value, json};
 
 use repocert::check::{
     CheckError, CheckItemKind, CheckOptions, CheckOutcome, CheckReport, CheckSelectionMode,
@@ -10,6 +9,7 @@ use repocert::check::{
 use repocert::config::LoadError;
 
 use super::app::{CheckArgs, OutputFormat};
+use super::json::{command_error, command_success};
 
 pub(super) fn run(args: CheckArgs) -> ExitCode {
     let options = CheckOptions {
@@ -89,32 +89,44 @@ fn render_human_success(report: &CheckReport) {
 }
 
 fn render_json_success(report: &CheckReport) {
-    let output = json!({
-        "ok": report.ok(),
-        "command": "check",
-        "repo_root": path_string(&report.paths.repo_root),
-        "config_path": path_string(&report.paths.config_path),
-        "selection_mode": selection_mode_label(&report.selection_mode),
-        "profiles": report.profiles,
-        "checks": report.checks,
-        "results": report.results.iter().map(|result| {
-            json!({
-                "name": result.name,
-                "kind": item_kind_label(&result.kind),
-                "outcome": outcome_label(&result.outcome),
-                "exit_code": result.exit_code,
-                "duration_ms": result.duration_ms,
-                "message": result.message,
-            })
-        }).collect::<Vec<_>>(),
-        "summary": {
+    let mut extra = Map::new();
+    extra.insert(
+        "selection_mode".to_string(),
+        Value::String(selection_mode_label(&report.selection_mode).to_string()),
+    );
+    extra.insert("profiles".to_string(), json!(report.profiles));
+    extra.insert("checks".to_string(), json!(report.checks));
+    extra.insert(
+        "results".to_string(),
+        Value::Array(
+            report
+                .results
+                .iter()
+                .map(|result| {
+                    json!({
+                        "name": result.name,
+                        "kind": item_kind_label(&result.kind),
+                        "outcome": outcome_label(&result.outcome),
+                        "exit_code": result.exit_code,
+                        "duration_ms": result.duration_ms,
+                        "message": result.message,
+                    })
+                })
+                .collect(),
+        ),
+    );
+    extra.insert(
+        "summary".to_string(),
+        json!({
             "total": report.summary.total,
             "pass": report.summary.pass,
             "fail": report.summary.fail,
             "timeout": report.summary.timeout,
             "repair_needed": report.summary.repair_needed,
-        }
-    });
+        }),
+    );
+
+    let output = command_success("check", &report.paths, extra);
     println!(
         "{}",
         serde_json::to_string(&output).expect("JSON serialization should succeed")
@@ -127,17 +139,13 @@ fn render_human_error(error: &CheckError) {
 }
 
 fn render_json_error(error: &CheckError) {
-    let paths = error.paths();
-    let output = json!({
-        "ok": false,
-        "command": "check",
-        "repo_root": paths.map(|paths| path_string(&paths.repo_root)),
-        "config_path": paths.map(|paths| path_string(&paths.config_path)),
-        "error": {
-            "category": error_category(error),
-            "message": error.to_string(),
-        },
-    });
+    let output = command_error(
+        "check",
+        error.paths(),
+        error_category(error),
+        error.to_string(),
+        None,
+    );
     println!(
         "{}",
         serde_json::to_string(&output).expect("JSON serialization should succeed")
@@ -176,8 +184,4 @@ fn outcome_label(outcome: &CheckOutcome) -> &'static str {
         CheckOutcome::Timeout => "timeout",
         CheckOutcome::RepairNeeded => "repair_needed",
     }
-}
-
-fn path_string(path: &Path) -> String {
-    path.display().to_string()
 }

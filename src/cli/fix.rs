@@ -1,12 +1,12 @@
-use std::path::Path;
 use std::process::ExitCode;
 
-use serde_json::json;
+use serde_json::{Map, Value, json};
 
 use repocert::config::LoadError;
 use repocert::fix::{FixError, FixOptions, FixOutcome, FixReport, FixSelectionMode, run_fix};
 
 use super::app::{FixArgs, OutputFormat};
+use super::json::{command_error, command_success};
 
 pub(super) fn run(args: FixArgs) -> ExitCode {
     let options = FixOptions {
@@ -81,31 +81,43 @@ fn render_human_success(report: &FixReport) {
 }
 
 fn render_json_success(report: &FixReport) {
-    let output = json!({
-        "ok": report.ok(),
-        "command": "fix",
-        "repo_root": path_string(&report.paths.repo_root),
-        "config_path": path_string(&report.paths.config_path),
-        "selection_mode": selection_mode_label(&report.selection_mode),
-        "profile": report.profile,
-        "fixers": report.fixers,
-        "results": report.results.iter().map(|result| {
-            json!({
-                "name": result.name,
-                "outcome": outcome_label(&result.outcome),
-                "exit_code": result.exit_code,
-                "duration_ms": result.duration_ms,
-                "message": result.message,
-            })
-        }).collect::<Vec<_>>(),
-        "summary": {
+    let mut extra = Map::new();
+    extra.insert(
+        "selection_mode".to_string(),
+        Value::String(selection_mode_label(&report.selection_mode).to_string()),
+    );
+    extra.insert("profile".to_string(), json!(report.profile));
+    extra.insert("fixers".to_string(), json!(report.fixers));
+    extra.insert(
+        "results".to_string(),
+        Value::Array(
+            report
+                .results
+                .iter()
+                .map(|result| {
+                    json!({
+                        "name": result.name,
+                        "outcome": outcome_label(&result.outcome),
+                        "exit_code": result.exit_code,
+                        "duration_ms": result.duration_ms,
+                        "message": result.message,
+                    })
+                })
+                .collect(),
+        ),
+    );
+    extra.insert(
+        "summary".to_string(),
+        json!({
             "total": report.summary.total,
             "pass": report.summary.pass,
             "fail": report.summary.fail,
             "timeout": report.summary.timeout,
-        },
-        "error": serde_json::Value::Null,
-    });
+        }),
+    );
+    extra.insert("error".to_string(), Value::Null);
+
+    let output = command_success("fix", &report.paths, extra);
     println!(
         "{}",
         serde_json::to_string(&output).expect("JSON serialization should succeed")
@@ -118,17 +130,13 @@ fn render_human_error(error: &FixError) {
 }
 
 fn render_json_error(error: &FixError) {
-    let paths = error.paths();
-    let output = json!({
-        "ok": false,
-        "command": "fix",
-        "repo_root": paths.map(|paths| path_string(&paths.repo_root)),
-        "config_path": paths.map(|paths| path_string(&paths.config_path)),
-        "error": {
-            "category": error_category(error),
-            "message": error.to_string(),
-        },
-    });
+    let output = command_error(
+        "fix",
+        error.paths(),
+        error_category(error),
+        error.to_string(),
+        None,
+    );
     println!(
         "{}",
         serde_json::to_string(&output).expect("JSON serialization should succeed")
@@ -159,8 +167,4 @@ fn outcome_label(outcome: &FixOutcome) -> &'static str {
         FixOutcome::Fail => "fail",
         FixOutcome::Timeout => "timeout",
     }
-}
-
-fn path_string(path: &Path) -> String {
-    path.display().to_string()
 }

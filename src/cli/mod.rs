@@ -1,6 +1,7 @@
 mod app;
 mod check;
 mod fix;
+mod json;
 mod validate;
 
 use std::process::ExitCode;
