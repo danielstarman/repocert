@@ -3,6 +3,7 @@ mod authorize;
 mod certify;
 mod check;
 mod fix;
+mod install_hooks;
 mod json;
 mod status;
 mod validate;
@@ -27,6 +28,7 @@ pub fn run() -> ExitCode {
         Commands::Certify(args) => certify::run(args),
         Commands::Check(args) => check::run(args),
         Commands::Fix(args) => fix::run(args),
+        Commands::InstallHooks(args) => install_hooks::run(args),
         Commands::Status(args) => status::run(args),
         Commands::Validate(args) => validate::run(args),
     }

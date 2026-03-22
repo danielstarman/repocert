@@ -7,4 +7,5 @@ pub mod enforcement;
 mod exec;
 pub mod fix;
 mod git;
+pub mod hooks;
 pub mod status;
