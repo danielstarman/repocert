@@ -1,4 +1,5 @@
 mod app;
+mod authorize;
 mod certify;
 mod check;
 mod fix;
@@ -22,6 +23,7 @@ pub fn run() -> ExitCode {
     };
 
     match cli.command {
+        Commands::Authorize(args) => authorize::run(args),
         Commands::Certify(args) => certify::run(args),
         Commands::Check(args) => check::run(args),
         Commands::Fix(args) => fix::run(args),

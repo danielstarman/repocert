@@ -1,4 +1,7 @@
-use crate::certification::{CertificationStore, compute_contract_fingerprint};
+use crate::certification::{
+    CertificationStore, ProfileCertificationState, compute_contract_fingerprint,
+    inspect_profile_certification,
+};
 use crate::config::load_contract;
 use crate::git::{resolve_commit, resolve_head_commit};
 
@@ -53,12 +56,17 @@ pub fn run_status(options: StatusOptions) -> Result<StatusReport, StatusError> {
     let profile_results = selected_profiles
         .iter()
         .map(|profile| {
-            build_profile_result(&store, &commit, profile, &contract_fingerprint).map_err(|error| {
-                StatusError::Storage {
+            inspect_profile_certification(&store, &commit, profile, &contract_fingerprint)
+                .map(|inspection| StatusProfileResult {
+                    profile: inspection.profile,
+                    state: map_profile_state(&inspection.state),
+                    other_certified_commits: inspection.other_certified_commits,
+                    recorded_fingerprint: inspection.recorded_fingerprint,
+                })
+                .map_err(|error| StatusError::Storage {
                     paths: loaded.paths.clone(),
                     error,
-                }
-            })
+                })
         })
         .collect::<Result<Vec<_>, _>>()?;
     let protected_refs = loaded
@@ -127,54 +135,6 @@ fn resolve_status_profiles(
     }
 }
 
-fn build_profile_result(
-    store: &CertificationStore,
-    commit: &str,
-    profile: &str,
-    current_fingerprint: &crate::certification::ContractFingerprint,
-) -> Result<StatusProfileResult, crate::certification::StorageError> {
-    let key = crate::certification::CertificationKey {
-        commit: commit.to_string(),
-        profile: profile.to_string(),
-    };
-    if let Some(record) = store.read(&key)? {
-        let state = if record.contract_fingerprint == *current_fingerprint {
-            StatusProfileState::Certified
-        } else {
-            StatusProfileState::StaleFingerprint
-        };
-        return Ok(StatusProfileResult {
-            profile: profile.to_string(),
-            state,
-            other_certified_commits: Vec::new(),
-            recorded_fingerprint: Some(record.contract_fingerprint),
-        });
-    }
-
-    let mut other_commits = store
-        .list_for_profile(profile)?
-        .into_iter()
-        .map(|record| record.key.commit)
-        .collect::<Vec<_>>();
-    other_commits.retain(|other_commit| other_commit != commit);
-
-    if other_commits.is_empty() {
-        Ok(StatusProfileResult {
-            profile: profile.to_string(),
-            state: StatusProfileState::Uncertified,
-            other_certified_commits: Vec::new(),
-            recorded_fingerprint: None,
-        })
-    } else {
-        Ok(StatusProfileResult {
-            profile: profile.to_string(),
-            state: StatusProfileState::StaleCommit,
-            other_certified_commits: other_commits,
-            recorded_fingerprint: None,
-        })
-    }
-}
-
 fn summarize(results: &[StatusProfileResult]) -> StatusSummary {
     let mut summary = StatusSummary {
         total_profiles: results.len(),
@@ -194,4 +154,13 @@ fn summarize(results: &[StatusProfileResult]) -> StatusSummary {
     }
 
     summary
+}
+
+fn map_profile_state(state: &ProfileCertificationState) -> StatusProfileState {
+    match state {
+        ProfileCertificationState::Certified => StatusProfileState::Certified,
+        ProfileCertificationState::StaleCommit => StatusProfileState::StaleCommit,
+        ProfileCertificationState::StaleFingerprint => StatusProfileState::StaleFingerprint,
+        ProfileCertificationState::Uncertified => StatusProfileState::Uncertified,
+    }
 }
