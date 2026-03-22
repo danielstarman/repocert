@@ -11,6 +11,8 @@ mod cli_certify;
 mod cli_check;
 #[path = "cli/fix.rs"]
 mod cli_fix;
+#[path = "cli/install_hooks.rs"]
+mod cli_install_hooks;
 #[path = "cli/status.rs"]
 mod cli_status;
 #[path = "cli/validate.rs"]
