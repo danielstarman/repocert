@@ -58,9 +58,9 @@ path = ".repocert/hooks"
         load_contract(LoadOptions::discover_from(repo.path().join("nested/work"))).unwrap();
 
     // Assert
-    assert_eq!(loaded.repo_root, repo.path().canonicalize().unwrap());
+    assert_eq!(loaded.paths.repo_root, repo.path().canonicalize().unwrap());
     assert_eq!(
-        loaded.config_path,
+        loaded.paths.config_path,
         repo.path()
             .join(".repocert/config.toml")
             .canonicalize()
@@ -98,7 +98,7 @@ fn load_contract_repo_root_without_default_config_returns_discovery_error() {
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
     // Assert
-    match error {
+    match error.error {
         LoadError::Discovery(error) => {
             let message = error.to_string();
             assert!(message.contains(".repocert/config.toml"));
@@ -124,7 +124,7 @@ fn load_contract_mismatched_repo_root_and_config_path_returns_discovery_error() 
     .unwrap_err();
 
     // Assert
-    match error {
+    match error.error {
         LoadError::Discovery(error) => {
             assert!(error.to_string().contains("do not match"));
         }
@@ -160,9 +160,9 @@ fn load_contract_symlinked_config_returns_canonical_path_in_all_modes() {
         .join(".repocert/real-config.toml")
         .canonicalize()
         .unwrap();
-    assert_eq!(from_repo_root.config_path, canonical_target);
-    assert_eq!(from_config_path.config_path, canonical_target);
-    assert_eq!(from_discovery.config_path, canonical_target);
+    assert_eq!(from_repo_root.paths.config_path, canonical_target);
+    assert_eq!(from_config_path.paths.config_path, canonical_target);
+    assert_eq!(from_discovery.paths.config_path, canonical_target);
 }
 
 #[test]
@@ -175,7 +175,18 @@ fn load_contract_invalid_schema_version_returns_validation_error() {
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
     // Assert
-    match error {
+    assert_eq!(
+        error.paths.as_ref().unwrap().repo_root,
+        repo.path().canonicalize().unwrap()
+    );
+    assert_eq!(
+        error.paths.as_ref().unwrap().config_path,
+        repo.path()
+            .join(".repocert/config.toml")
+            .canonicalize()
+            .unwrap()
+    );
+    match error.error {
         LoadError::Validation(errors) => {
             assert!(errors.to_string().contains("schema_version"));
         }
@@ -210,7 +221,7 @@ checks = ["test"]
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
     // Assert
-    match error {
+    match error.error {
         LoadError::Validation(errors) => {
             assert!(errors.to_string().contains("profile include cycle"));
         }
@@ -245,7 +256,7 @@ certify = true
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
     // Assert
-    match error {
+    match error.error {
         LoadError::Validation(errors) => assert!(errors.to_string().contains("probe_argv")),
         other => panic!("unexpected error: {other:?}"),
     }
@@ -277,7 +288,7 @@ profile = "dev"
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
     // Assert
-    match error {
+    match error.error {
         LoadError::Validation(errors) => {
             assert!(
                 errors
@@ -314,7 +325,7 @@ hooks = ["pre-push"]
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
     // Assert
-    match error {
+    match error.error {
         LoadError::Validation(errors) => {
             assert!(
                 errors

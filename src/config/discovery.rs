@@ -4,17 +4,12 @@ use std::path::{Path, PathBuf};
 
 use super::LoadOptions;
 use super::error::DiscoveryError;
+use super::model::LoadPaths;
 
 const CONFIG_DIR: &str = ".repocert";
 const CONFIG_FILE: &str = "config.toml";
 
-#[derive(Debug)]
-pub(super) struct ResolvedPaths {
-    pub repo_root: PathBuf,
-    pub config_path: PathBuf,
-}
-
-pub(super) fn resolve(options: LoadOptions) -> Result<ResolvedPaths, DiscoveryError> {
+pub(super) fn resolve(options: LoadOptions) -> Result<LoadPaths, DiscoveryError> {
     match (options.repo_root, options.config_path) {
         (Some(repo_root), Some(config_path)) => resolve_both(&repo_root, &config_path),
         (Some(repo_root), None) => resolve_from_repo_root(&repo_root),
@@ -30,7 +25,7 @@ pub(super) fn resolve(options: LoadOptions) -> Result<ResolvedPaths, DiscoveryEr
     }
 }
 
-fn resolve_both(repo_root: &Path, config_path: &Path) -> Result<ResolvedPaths, DiscoveryError> {
+fn resolve_both(repo_root: &Path, config_path: &Path) -> Result<LoadPaths, DiscoveryError> {
     let resolved_repo_root = canonicalize_dir(repo_root)?;
     let resolved_config_path = canonicalize_file(config_path)?;
     let expected_config_path = canonicalize_repo_config_path(&resolved_repo_root)?;
@@ -42,13 +37,13 @@ fn resolve_both(repo_root: &Path, config_path: &Path) -> Result<ResolvedPaths, D
         });
     }
 
-    Ok(ResolvedPaths {
+    Ok(LoadPaths {
         repo_root: resolved_repo_root,
         config_path: expected_config_path,
     })
 }
 
-fn resolve_from_repo_root(repo_root: &Path) -> Result<ResolvedPaths, DiscoveryError> {
+fn resolve_from_repo_root(repo_root: &Path) -> Result<LoadPaths, DiscoveryError> {
     let resolved_repo_root = canonicalize_dir(repo_root)?;
     let config_path = repo_config_path(&resolved_repo_root);
 
@@ -61,13 +56,13 @@ fn resolve_from_repo_root(repo_root: &Path) -> Result<ResolvedPaths, DiscoveryEr
 
     let config_path = canonicalize_repo_config_path(&resolved_repo_root)?;
 
-    Ok(ResolvedPaths {
+    Ok(LoadPaths {
         repo_root: resolved_repo_root,
         config_path,
     })
 }
 
-fn resolve_from_config_path(config_path: &Path) -> Result<ResolvedPaths, DiscoveryError> {
+fn resolve_from_config_path(config_path: &Path) -> Result<LoadPaths, DiscoveryError> {
     validate_explicit_config_slot(config_path)?;
 
     let config_dir =
@@ -94,17 +89,17 @@ fn resolve_from_config_path(config_path: &Path) -> Result<ResolvedPaths, Discove
         });
     }
 
-    Ok(ResolvedPaths {
+    Ok(LoadPaths {
         repo_root,
         config_path: resolved_config_path,
     })
 }
 
-fn discover_from(start_dir: &Path) -> Result<ResolvedPaths, DiscoveryError> {
+fn discover_from(start_dir: &Path) -> Result<LoadPaths, DiscoveryError> {
     for candidate_root in start_dir.ancestors() {
         let config_path = repo_config_path(candidate_root);
         if config_path.is_file() {
-            return Ok(ResolvedPaths {
+            return Ok(LoadPaths {
                 repo_root: candidate_root.to_path_buf(),
                 config_path: canonicalize_repo_config_path(candidate_root)?,
             });
