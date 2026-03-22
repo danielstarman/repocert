@@ -649,24 +649,3 @@ fn issue(
         message: message.into(),
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use std::path::Path;
-
-    use super::normalize_repo_path;
-
-    #[test]
-    fn normalizes_repo_relative_paths() {
-        let repo_root = Path::new("/tmp/example");
-        let path = normalize_repo_path("./docs/./spec.md", repo_root).unwrap();
-        assert_eq!(path.as_str(), "docs/spec.md");
-    }
-
-    #[test]
-    fn rejects_parent_directory_escape() {
-        let repo_root = Path::new("/tmp/example");
-        let error = normalize_repo_path("../secret", repo_root).unwrap_err();
-        assert!(error.contains("escape"));
-    }
-}

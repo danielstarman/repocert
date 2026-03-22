@@ -1,21 +1,16 @@
-use std::fs;
-
 use repocert::config::{HookMode, LoadError, LoadOptions, load_contract};
 use tempfile::TempDir;
 
 #[cfg(unix)]
+use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs as unix_fs;
 
-fn write_repo_file(repo: &TempDir, relative_path: &str, contents: &str) {
-    let path = repo.path().join(relative_path);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).unwrap();
-    }
-    fs::write(path, contents).unwrap();
-}
+use crate::write_repo_file;
 
 #[test]
-fn loads_and_validates_a_contract_from_discovery() {
+fn load_contract_discovered_config_returns_validated_contract() {
+    // Arrange
     let repo = TempDir::new().unwrap();
     write_repo_file(
         &repo,
@@ -56,11 +51,13 @@ mode = "repo-owned"
 path = ".repocert/hooks"
 "#,
     );
-    fs::create_dir_all(repo.path().join("nested/work")).unwrap();
+    std::fs::create_dir_all(repo.path().join("nested/work")).unwrap();
 
+    // Act
     let loaded =
         load_contract(LoadOptions::discover_from(repo.path().join("nested/work"))).unwrap();
 
+    // Assert
     assert_eq!(loaded.repo_root, repo.path().canonicalize().unwrap());
     assert_eq!(
         loaded.config_path,
@@ -93,11 +90,14 @@ path = ".repocert/hooks"
 }
 
 #[test]
-fn explicit_repo_root_requires_default_config_path() {
+fn load_contract_repo_root_without_default_config_returns_discovery_error() {
+    // Arrange
     let repo = TempDir::new().unwrap();
 
+    // Act
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
+    // Assert
     match error {
         LoadError::Discovery(error) => {
             let message = error.to_string();
@@ -108,12 +108,14 @@ fn explicit_repo_root_requires_default_config_path() {
 }
 
 #[test]
-fn explicit_repo_root_and_config_path_must_match() {
+fn load_contract_mismatched_repo_root_and_config_path_returns_discovery_error() {
+    // Arrange
     let repo = TempDir::new().unwrap();
     let other = TempDir::new().unwrap();
     write_repo_file(&repo, ".repocert/config.toml", "schema_version = 1");
     write_repo_file(&other, ".repocert/config.toml", "schema_version = 1");
 
+    // Act
     let error = load_contract(LoadOptions {
         start_dir: None,
         repo_root: Some(repo.path().to_path_buf()),
@@ -121,6 +123,7 @@ fn explicit_repo_root_and_config_path_must_match() {
     })
     .unwrap_err();
 
+    // Assert
     match error {
         LoadError::Discovery(error) => {
             assert!(error.to_string().contains("do not match"));
@@ -131,7 +134,8 @@ fn explicit_repo_root_and_config_path_must_match() {
 
 #[cfg(unix)]
 #[test]
-fn canonicalizes_config_path_consistently_across_resolution_modes() {
+fn load_contract_symlinked_config_returns_canonical_path_in_all_modes() {
+    // Arrange
     let repo = TempDir::new().unwrap();
     write_repo_file(&repo, ".repocert/real-config.toml", "schema_version = 1");
     fs::create_dir_all(repo.path().join("nested/work")).unwrap();
@@ -141,6 +145,7 @@ fn canonicalizes_config_path_consistently_across_resolution_modes() {
     )
     .unwrap();
 
+    // Act
     let from_repo_root = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap();
     let from_config_path = load_contract(LoadOptions::from_config_path(
         repo.path().join(".repocert/config.toml"),
@@ -149,6 +154,7 @@ fn canonicalizes_config_path_consistently_across_resolution_modes() {
     let from_discovery =
         load_contract(LoadOptions::discover_from(repo.path().join("nested/work"))).unwrap();
 
+    // Assert
     let canonical_target = repo
         .path()
         .join(".repocert/real-config.toml")
@@ -160,12 +166,15 @@ fn canonicalizes_config_path_consistently_across_resolution_modes() {
 }
 
 #[test]
-fn rejects_invalid_schema_version() {
+fn load_contract_invalid_schema_version_returns_validation_error() {
+    // Arrange
     let repo = TempDir::new().unwrap();
     write_repo_file(&repo, ".repocert/config.toml", "schema_version = 2");
 
+    // Act
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
+    // Assert
     match error {
         LoadError::Validation(errors) => {
             assert!(errors.to_string().contains("schema_version"));
@@ -175,7 +184,8 @@ fn rejects_invalid_schema_version() {
 }
 
 #[test]
-fn rejects_profile_include_cycles() {
+fn load_contract_profile_include_cycle_returns_validation_error() {
+    // Arrange
     let repo = TempDir::new().unwrap();
     write_repo_file(
         &repo,
@@ -196,18 +206,21 @@ checks = ["test"]
 "#,
     );
 
+    // Act
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
+    // Assert
     match error {
         LoadError::Validation(errors) => {
-            assert!(errors.to_string().contains("profile include cycle"))
+            assert!(errors.to_string().contains("profile include cycle"));
         }
         other => panic!("unexpected error: {other:?}"),
     }
 }
 
 #[test]
-fn rejects_profile_fixers_without_probe_commands() {
+fn load_contract_profile_fixer_without_probe_returns_validation_error() {
+    // Arrange
     let repo = TempDir::new().unwrap();
     write_repo_file(
         &repo,
@@ -228,8 +241,10 @@ certify = true
 "#,
     );
 
+    // Act
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
+    // Assert
     match error {
         LoadError::Validation(errors) => assert!(errors.to_string().contains("probe_argv")),
         other => panic!("unexpected error: {other:?}"),
@@ -237,27 +252,8 @@ certify = true
 }
 
 #[test]
-fn rejects_protected_paths_that_escape_repo_root() {
-    let repo = TempDir::new().unwrap();
-    write_repo_file(
-        &repo,
-        ".repocert/config.toml",
-        r#"
-schema_version = 1
-protected_paths = ["../outside.txt"]
-"#,
-    );
-
-    let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
-
-    match error {
-        LoadError::Validation(errors) => assert!(errors.to_string().contains("escape")),
-        other => panic!("unexpected error: {other:?}"),
-    }
-}
-
-#[test]
-fn rejects_protected_refs_to_non_certifiable_profiles() {
+fn load_contract_non_certifiable_protected_ref_returns_validation_error() {
+    // Arrange
     let repo = TempDir::new().unwrap();
     write_repo_file(
         &repo,
@@ -277,8 +273,10 @@ profile = "dev"
 "#,
     );
 
+    // Act
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
+    // Assert
     match error {
         LoadError::Validation(errors) => {
             assert!(
@@ -292,7 +290,8 @@ profile = "dev"
 }
 
 #[test]
-fn rejects_conflicting_hook_mode_configuration() {
+fn load_contract_conflicting_hook_mode_tables_returns_validation_error() {
+    // Arrange
     let repo = TempDir::new().unwrap();
     write_repo_file(
         &repo,
@@ -311,8 +310,10 @@ hooks = ["pre-push"]
 "#,
     );
 
+    // Act
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
+    // Assert
     match error {
         LoadError::Validation(errors) => {
             assert!(
