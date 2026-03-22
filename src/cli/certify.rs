@@ -193,7 +193,7 @@ fn error_category(error: &CertifyError) -> &'static str {
         },
         CertifyError::Selection { .. } => "selection",
         CertifyError::DirtyWorktree { .. } => "worktree",
-        CertifyError::GitStatus { .. } | CertifyError::GitHead { .. } => "git",
+        CertifyError::GitStatus { .. } | CertifyError::GitCommit { .. } => "git",
         CertifyError::Fingerprint { .. } => "fingerprint",
         CertifyError::Storage { .. } => "storage",
     }

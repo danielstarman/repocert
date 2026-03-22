@@ -3,28 +3,17 @@ use thiserror::Error;
 use crate::certification::{FingerprintError, StorageError};
 use crate::config::{LoadFailure, LoadPaths};
 use crate::contract::SelectionError;
-use crate::git::{GitCommitError, GitWorktreeError};
+use crate::git::GitCommitError;
 
 #[derive(Debug, Error)]
-pub enum CertifyError {
+pub enum StatusError {
     #[error(transparent)]
     Load(#[from] LoadFailure),
     #[error("{error}")]
     Selection {
         paths: LoadPaths,
         #[source]
-        error: CertifySelectionError,
-    },
-    #[error("worktree must be clean before certification; dirty path(s): {dirty_paths}")]
-    DirtyWorktree {
-        paths: LoadPaths,
-        dirty_paths: String,
-    },
-    #[error("{error}")]
-    GitStatus {
-        paths: LoadPaths,
-        #[source]
-        error: GitWorktreeError,
+        error: StatusSelectionError,
     },
     #[error("{error}")]
     GitCommit {
@@ -46,13 +35,11 @@ pub enum CertifyError {
     },
 }
 
-impl CertifyError {
+impl StatusError {
     pub fn paths(&self) -> Option<&LoadPaths> {
         match self {
             Self::Load(error) => error.paths.as_ref(),
             Self::Selection { paths, .. }
-            | Self::DirtyWorktree { paths, .. }
-            | Self::GitStatus { paths, .. }
             | Self::GitCommit { paths, .. }
             | Self::Fingerprint { paths, .. }
             | Self::Storage { paths, .. } => Some(paths),
@@ -61,27 +48,22 @@ impl CertifyError {
 }
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
-pub enum CertifySelectionError {
-    #[error(
-        "no profile selector was provided and no implicit or explicit default profile is available"
-    )]
-    NoDefaultProfile,
+pub enum StatusSelectionError {
     #[error("unknown profile selector(s): {0}")]
     UnknownProfiles(String),
     #[error("selected profile(s) are not certification-eligible: {0}")]
     NonCertifiableProfiles(String),
 }
 
-impl From<SelectionError> for CertifySelectionError {
+impl From<SelectionError> for StatusSelectionError {
     fn from(error: SelectionError) -> Self {
         match error {
-            SelectionError::NoDefaultProfile => Self::NoDefaultProfile,
             SelectionError::UnknownProfiles(names) => Self::UnknownProfiles(names),
-            SelectionError::ConflictingSelectors => {
-                unreachable!("certify only supports profile selection")
-            }
-            SelectionError::UnknownChecks(_) | SelectionError::UnknownFixers(_) => {
-                unreachable!("check/fix selector errors should not map into certify")
+            SelectionError::ConflictingSelectors
+            | SelectionError::NoDefaultProfile
+            | SelectionError::UnknownChecks(_)
+            | SelectionError::UnknownFixers(_) => {
+                unreachable!("status only uses explicit or all-profile selection")
             }
         }
     }
