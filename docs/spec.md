@@ -68,6 +68,15 @@ Stronger anti-forgery guarantees are future work and may require:
 - privilege separation
 - storage outside ordinary git-local writable metadata
 
+## Design Rationale
+
+Some v1 constraints are intentional semantic choices, not just implementation shortcuts.
+
+- `fix` accepts at most one profile in v1 because mutating execution should stay easy to reason about. Observation aggregates more cleanly than mutation.
+- If implementation reveals that the right solution is broader than the immediate task, broadening scope is acceptable when it removes a dishonest or leaky abstraction.
+- Elegance and semantic honesty are preferred over artificially narrow implementations.
+- Compatibility shims are avoided by default. When interfaces change, in-repo callers should normally be updated in the same change.
+
 ## Core Model
 
 - `check` evaluates the current worktree.
