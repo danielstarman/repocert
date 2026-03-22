@@ -232,7 +232,7 @@ argv = ["sh", "-c", "printf 'ok' > note.txt"]
 }
 
 #[test]
-fn fix_current_repo_without_fixers_succeeds() {
+fn fix_current_repo_default_profile_runs_fmt_fixer() {
     // Arrange
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
 
@@ -253,5 +253,36 @@ fn fix_current_repo_without_fixers_succeeds() {
     assert_eq!(json["ok"], true);
     assert_eq!(json["selection_mode"], "profile");
     assert_eq!(json["profile"], "default");
-    assert_eq!(json["results"].as_array().unwrap().len(), 0);
+    assert_eq!(json["fixers"], serde_json::json!(["fmt"]));
+    assert_eq!(json["results"].as_array().unwrap().len(), 1);
+    assert_eq!(json["results"][0]["name"], "fmt");
+    assert_eq!(json["results"][0]["outcome"], "pass");
+}
+
+#[test]
+fn fix_current_repo_named_fmt_returns_success() {
+    // Arrange
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+
+    // Act
+    let output = run_fix(
+        &[
+            "--repo-root",
+            repo_root.to_str().unwrap(),
+            "--name",
+            "fmt",
+            "--format",
+            "json",
+        ],
+        repo_root,
+    );
+
+    // Assert
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["ok"], true);
+    assert_eq!(json["selection_mode"], "fixers");
+    assert_eq!(json["fixers"], serde_json::json!(["fmt"]));
+    assert_eq!(json["results"][0]["name"], "fmt");
+    assert_eq!(json["results"][0]["outcome"], "pass");
 }

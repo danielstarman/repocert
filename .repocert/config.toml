@@ -6,5 +6,10 @@ argv = ["cargo", "fmt", "--check"]
 [checks.test]
 argv = ["cargo", "test"]
 
+[fixers.fmt]
+argv = ["cargo", "fmt"]
+probe_argv = ["cargo", "fmt", "--check"]
+
 [profiles.default]
 checks = ["fmt", "test"]
+fixers = ["fmt"]
