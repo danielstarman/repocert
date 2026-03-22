@@ -1,56 +1,13 @@
 use std::path::Path;
-use std::path::PathBuf;
 use std::process::ExitCode;
 
-use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde_json::json;
 
 use repocert::config::{LoadError, LoadOptions, load_contract};
 
-#[derive(Debug, Parser)]
-#[command(name = "repocert")]
-struct Cli {
-    #[command(subcommand)]
-    command: Commands,
-}
+use super::app::{OutputFormat, ValidateArgs};
 
-#[derive(Debug, Subcommand)]
-enum Commands {
-    Validate(ValidateArgs),
-}
-
-#[derive(Debug, Args)]
-struct ValidateArgs {
-    #[arg(long = "repo-root")]
-    repo_root: Option<PathBuf>,
-    #[arg(long = "config-path")]
-    config_path: Option<PathBuf>,
-    #[arg(long, value_enum, default_value_t = OutputFormat::Human)]
-    format: OutputFormat,
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
-enum OutputFormat {
-    #[default]
-    Human,
-    Json,
-}
-
-pub fn run() -> ExitCode {
-    let cli = match Cli::try_parse() {
-        Ok(cli) => cli,
-        Err(error) => {
-            let _ = error.print();
-            return ExitCode::from(error.exit_code() as u8);
-        }
-    };
-
-    match cli.command {
-        Commands::Validate(args) => run_validate(args),
-    }
-}
-
-fn run_validate(args: ValidateArgs) -> ExitCode {
+pub(super) fn run(args: ValidateArgs) -> ExitCode {
     let load_options = LoadOptions {
         start_dir: None,
         repo_root: args.repo_root,
