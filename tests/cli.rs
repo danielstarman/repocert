@@ -2,6 +2,8 @@ use std::fs;
 
 use tempfile::TempDir;
 
+#[path = "cli/check.rs"]
+mod cli_check;
 #[path = "cli/validate.rs"]
 mod cli_validate;
 
