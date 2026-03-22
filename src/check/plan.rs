@@ -1,8 +1,10 @@
-use std::collections::BTreeSet;
-
 use crate::check::error::CheckSelectionError;
 use crate::check::types::{CheckItemKind, CheckSelectionMode};
 use crate::config::{CommandSpec, Contract, FixerSpec};
+use crate::contract::{
+    SelectionError, collect_effective_checks, collect_effective_fixers, resolve_named_checks,
+    resolve_profiles,
+};
 
 #[derive(Clone, Debug)]
 pub(super) struct PlannedItem {
@@ -28,7 +30,9 @@ pub(super) fn build_selection_plan(
     let has_names = !names.is_empty();
 
     if has_profiles && has_names {
-        return Err(CheckSelectionError::ConflictingSelectors);
+        return Err(CheckSelectionError::from(
+            SelectionError::ConflictingSelectors,
+        ));
     }
 
     if has_names {
@@ -42,16 +46,8 @@ fn build_named_check_plan(
     contract: &Contract,
     names: &[String],
 ) -> Result<SelectionPlan, CheckSelectionError> {
-    let selected_checks = dedupe_preserving_order(names);
-    let unknown = selected_checks
-        .iter()
-        .filter(|name| !contract.checks.contains_key(name.as_str()))
-        .cloned()
-        .collect::<Vec<_>>();
-
-    if !unknown.is_empty() {
-        return Err(CheckSelectionError::UnknownChecks(unknown.join(", ")));
-    }
+    let selected_checks =
+        resolve_named_checks(contract, names).map_err(CheckSelectionError::from)?;
 
     let items = selected_checks
         .iter()
@@ -78,50 +74,10 @@ fn build_profile_plan(
     contract: &Contract,
     requested_profiles: &[String],
 ) -> Result<SelectionPlan, CheckSelectionError> {
-    let profiles = if requested_profiles.is_empty() {
-        vec![
-            contract
-                .default_profile
-                .clone()
-                .ok_or(CheckSelectionError::NoDefaultProfile)?,
-        ]
-    } else {
-        dedupe_preserving_order(requested_profiles)
-    };
-
-    let unknown = profiles
-        .iter()
-        .filter(|name| !contract.profiles.contains_key(name.as_str()))
-        .cloned()
-        .collect::<Vec<_>>();
-
-    if !unknown.is_empty() {
-        return Err(CheckSelectionError::UnknownProfiles(unknown.join(", ")));
-    }
-
-    let mut checks = Vec::new();
-    let mut seen_checks = BTreeSet::new();
-    let mut fixer_names = Vec::new();
-    let mut seen_fixers = BTreeSet::new();
-
-    for profile_name in &profiles {
-        let profile = contract
-            .profiles
-            .get(profile_name)
-            .expect("profile should exist after validation");
-
-        for check in &profile.effective_checks {
-            if seen_checks.insert(check.clone()) {
-                checks.push(check.clone());
-            }
-        }
-
-        for fixer in &profile.effective_fixers {
-            if seen_fixers.insert(fixer.clone()) {
-                fixer_names.push(fixer.clone());
-            }
-        }
-    }
+    let profiles =
+        resolve_profiles(contract, requested_profiles).map_err(CheckSelectionError::from)?;
+    let checks = collect_effective_checks(contract, &profiles);
+    let fixer_names = collect_effective_fixers(contract, &profiles);
 
     let mut items = checks
         .iter()
@@ -172,17 +128,4 @@ fn probe_command_spec(fixer: &FixerSpec) -> CommandSpec {
         env: fixer.command.env.clone(),
         timeout_ms: fixer.probe_timeout_ms.or(fixer.command.timeout_ms),
     }
-}
-
-fn dedupe_preserving_order(names: &[String]) -> Vec<String> {
-    let mut ordered = Vec::new();
-    let mut seen = BTreeSet::new();
-
-    for name in names {
-        if seen.insert(name.clone()) {
-            ordered.push(name.clone());
-        }
-    }
-
-    ordered
 }

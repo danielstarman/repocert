@@ -1,5 +1,7 @@
 mod app;
 mod check;
+mod fix;
+mod json;
 mod validate;
 
 use std::process::ExitCode;
@@ -19,6 +21,7 @@ pub fn run() -> ExitCode {
 
     match cli.command {
         Commands::Check(args) => check::run(args),
+        Commands::Fix(args) => fix::run(args),
         Commands::Validate(args) => validate::run(args),
     }
 }
