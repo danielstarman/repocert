@@ -183,3 +183,22 @@ argv = ["definitely-not-a-real-command"]
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(stdout.contains("PASS validate"));
 }
+
+#[test]
+fn validate_current_repo_contract_returns_success() {
+    // Arrange
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+
+    // Act
+    let output = run_validate(&["--repo-root", repo_root.to_str().unwrap()], repo_root);
+
+    // Assert
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("PASS validate"));
+    assert!(stdout.contains(&format!("repo_root: {}", repo_root.display())));
+    assert!(stdout.contains(&format!(
+        "config_path: {}",
+        repo_root.join(".repocert/config.toml").display()
+    )));
+}
