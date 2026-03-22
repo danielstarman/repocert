@@ -43,7 +43,7 @@ pub fn run_certify(options: CertifyOptions) -> Result<CertifyReport, CertifyErro
     }
 
     let commit =
-        resolve_head_commit(&loaded.paths.repo_root).map_err(|error| CertifyError::GitHead {
+        resolve_head_commit(&loaded.paths.repo_root).map_err(|error| CertifyError::GitCommit {
             paths: loaded.paths.clone(),
             error,
         })?;

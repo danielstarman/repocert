@@ -6,3 +6,4 @@ mod contract;
 mod exec;
 pub mod fix;
 mod git;
+pub mod status;

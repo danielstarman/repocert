@@ -3,6 +3,7 @@ mod certify;
 mod check;
 mod fix;
 mod json;
+mod status;
 mod validate;
 
 use std::process::ExitCode;
@@ -24,6 +25,7 @@ pub fn run() -> ExitCode {
         Commands::Certify(args) => certify::run(args),
         Commands::Check(args) => check::run(args),
         Commands::Fix(args) => fix::run(args),
+        Commands::Status(args) => status::run(args),
         Commands::Validate(args) => validate::run(args),
     }
 }

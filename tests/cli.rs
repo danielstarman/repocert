@@ -9,6 +9,8 @@ mod cli_certify;
 mod cli_check;
 #[path = "cli/fix.rs"]
 mod cli_fix;
+#[path = "cli/status.rs"]
+mod cli_status;
 #[path = "cli/validate.rs"]
 mod cli_validate;
 

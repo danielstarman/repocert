@@ -14,6 +14,7 @@ pub(super) enum Commands {
     Certify(CertifyArgs),
     Check(CheckArgs),
     Fix(FixArgs),
+    Status(StatusArgs),
     Validate(ValidateArgs),
 }
 
@@ -55,6 +56,22 @@ pub(super) struct FixArgs {
     pub profile: Option<String>,
     #[arg(long = "name")]
     pub name: Vec<String>,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct StatusArgs {
+    #[arg(long = "repo-root")]
+    pub repo_root: Option<PathBuf>,
+    #[arg(long = "config-path")]
+    pub config_path: Option<PathBuf>,
+    #[arg(long, value_enum, default_value_t = OutputFormat::Human)]
+    pub format: OutputFormat,
+    #[arg(long = "commit")]
+    pub commit: Option<String>,
+    #[arg(long = "profile")]
+    pub profile: Vec<String>,
+    #[arg(long = "assert-certified")]
+    pub assert_certified: bool,
 }
 
 #[derive(Debug, Args)]
