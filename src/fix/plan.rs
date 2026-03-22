@@ -1,5 +1,5 @@
 use crate::config::{CommandSpec, Contract};
-use crate::selection::{
+use crate::contract::{
     SelectionError, collect_effective_fixers, resolve_named_fixers, resolve_profiles,
 };
 

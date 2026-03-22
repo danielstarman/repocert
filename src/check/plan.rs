@@ -1,7 +1,7 @@
 use crate::check::error::CheckSelectionError;
 use crate::check::types::{CheckItemKind, CheckSelectionMode};
 use crate::config::{CommandSpec, Contract, FixerSpec};
-use crate::selection::{
+use crate::contract::{
     SelectionError, collect_effective_checks, collect_effective_fixers, resolve_named_checks,
     resolve_profiles,
 };

@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 use crate::config::{LoadFailure, LoadPaths};
-use crate::selection::SelectionError;
+use crate::contract::SelectionError;
 
 #[derive(Debug, Error)]
 pub enum FixError {
