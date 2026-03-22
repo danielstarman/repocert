@@ -1,4 +1,5 @@
 mod app;
+mod certify;
 mod check;
 mod fix;
 mod json;
@@ -20,6 +21,7 @@ pub fn run() -> ExitCode {
     };
 
     match cli.command {
+        Commands::Certify(args) => certify::run(args),
         Commands::Check(args) => check::run(args),
         Commands::Fix(args) => fix::run(args),
         Commands::Validate(args) => validate::run(args),

@@ -82,26 +82,6 @@ pub(crate) fn resolve_named_fixers(
     Ok(fixers)
 }
 
-pub(crate) fn collect_effective_checks(contract: &Contract, profiles: &[String]) -> Vec<String> {
-    let mut checks = Vec::new();
-    let mut seen_checks = BTreeSet::new();
-
-    for profile_name in profiles {
-        let profile = contract
-            .profiles
-            .get(profile_name)
-            .expect("profile should exist after validation");
-
-        for check in &profile.effective_checks {
-            if seen_checks.insert(check.clone()) {
-                checks.push(check.clone());
-            }
-        }
-    }
-
-    checks
-}
-
 pub(crate) fn collect_effective_fixers(contract: &Contract, profiles: &[String]) -> Vec<String> {
     let mut fixers = Vec::new();
     let mut seen_fixers = BTreeSet::new();

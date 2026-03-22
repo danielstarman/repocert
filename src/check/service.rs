@@ -1,13 +1,12 @@
 use std::path::PathBuf;
 
 use crate::config::load_contract;
+use crate::contract::progress_label;
 
 use super::error::CheckError;
 use super::execute::run_planned_item;
 use super::plan::{SelectionPlan, build_selection_plan};
-use super::types::{
-    CheckItemKind, CheckItemResult, CheckOptions, CheckOutcome, CheckReport, CheckSummary,
-};
+use super::types::{CheckItemResult, CheckOptions, CheckOutcome, CheckReport, CheckSummary};
 
 pub fn run_check(options: CheckOptions) -> Result<CheckReport, CheckError> {
     let CheckOptions {
@@ -46,7 +45,7 @@ fn execute_plan(
         .iter()
         .map(|item| {
             if emit_progress {
-                eprintln!("RUN {} {}", item_kind_label(&item.kind), item.name);
+                eprintln!("RUN {} {}", progress_label(&item.kind), item.name);
             }
             run_planned_item(repo_root, item)
         })
@@ -72,11 +71,4 @@ fn summarize(results: &[CheckItemResult]) -> CheckSummary {
     }
 
     summary
-}
-
-fn item_kind_label(kind: &CheckItemKind) -> &'static str {
-    match kind {
-        CheckItemKind::Check => "check",
-        CheckItemKind::FixerProbe => "probe",
-    }
 }

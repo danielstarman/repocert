@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::exec::{CommandRunnerOptions, CommandRunnerStatus, run_command};
-use crate::git::{capture_snapshot, protected_pathspecs};
+use crate::git::{capture_pathspec_snapshot, protected_pathspecs};
 
 use super::plan::PlannedFixer;
 use super::types::{FixItemResult, FixOutcome};
@@ -11,7 +11,7 @@ pub(super) fn run_planned_fixer(
     protected_roots: &[String],
     item: &PlannedFixer,
 ) -> FixItemResult {
-    let before = match capture_snapshot(repo_root, protected_roots) {
+    let before = match capture_pathspec_snapshot(repo_root, protected_roots) {
         Ok(snapshot) => snapshot,
         Err(error) => {
             return FixItemResult {
@@ -33,7 +33,7 @@ pub(super) fn run_planned_fixer(
         },
     );
 
-    let after = match capture_snapshot(repo_root, protected_roots) {
+    let after = match capture_pathspec_snapshot(repo_root, protected_roots) {
         Ok(snapshot) => snapshot,
         Err(error) => {
             return FixItemResult {

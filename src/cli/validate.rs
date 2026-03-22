@@ -23,7 +23,7 @@ pub(super) fn run(args: ValidateArgs) -> ExitCode {
                     println!("config_path: {}", loaded.paths.config_path.display());
                 }
                 OutputFormat::Json => {
-                    let output = command_success("validate", &loaded.paths, Map::new());
+                    let output = command_success("validate", &loaded.paths, true, Map::new());
                     println!(
                         "{}",
                         serde_json::to_string(&output).expect("JSON serialization should succeed")

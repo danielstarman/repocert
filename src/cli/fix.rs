@@ -117,7 +117,7 @@ fn render_json_success(report: &FixReport) {
     );
     command_fields.insert("error".to_string(), Value::Null);
 
-    let output = command_success("fix", &report.paths, command_fields);
+    let output = command_success("fix", &report.paths, report.ok(), command_fields);
     println!(
         "{}",
         serde_json::to_string(&output).expect("JSON serialization should succeed")
