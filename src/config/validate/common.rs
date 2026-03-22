@@ -19,7 +19,7 @@ pub(super) fn validate_argv(subject: &str, argv: &[String], issues: &mut Vec<Val
         issues.push(issue(
             ValidationErrorKind::InvalidCommand,
             subject.to_string(),
-            "argv must contain at least one element".to_string(),
+            "argv must include the executable as the first element".to_string(),
         ));
         return;
     }
