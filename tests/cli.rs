@@ -3,6 +3,8 @@ use std::process::Command;
 
 use tempfile::TempDir;
 
+#[path = "cli/authorize.rs"]
+mod cli_authorize;
 #[path = "cli/certify.rs"]
 mod cli_certify;
 #[path = "cli/check.rs"]

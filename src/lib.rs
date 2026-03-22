@@ -3,6 +3,7 @@ pub mod certify;
 pub mod check;
 pub mod config;
 mod contract;
+pub mod enforcement;
 mod exec;
 pub mod fix;
 mod git;
