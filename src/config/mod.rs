@@ -1,21 +1,20 @@
 mod discovery;
 mod error;
+mod loader;
 mod model;
 mod raw;
 mod validate;
 
-use std::fs;
 use std::path::PathBuf;
 
 pub use error::{
     DiscoveryError, LoadError, ParseError, ValidationErrorKind, ValidationErrors, ValidationIssue,
 };
+pub use loader::load_contract;
 pub use model::{
     CommandSpec, Contract, FixerSpec, HookMode, HooksConfig, LoadedContract, Profile, ProtectedRef,
     RepoPath,
 };
-
-use raw::RawConfig;
 
 #[derive(Clone, Debug, Default)]
 pub struct LoadOptions {
@@ -48,35 +47,4 @@ impl LoadOptions {
             config_path: Some(path.into()),
         }
     }
-}
-
-pub fn load_contract(options: LoadOptions) -> Result<LoadedContract, LoadError> {
-    let resolved = discovery::resolve(options)?;
-    let config_bytes = fs::read(&resolved.config_path).map_err(|source| {
-        LoadError::Discovery(DiscoveryError::Io {
-            path: resolved.config_path.clone(),
-            source,
-        })
-    })?;
-    let config_text = String::from_utf8(config_bytes.clone()).map_err(|source| {
-        LoadError::Parse(ParseError::InvalidUtf8 {
-            path: resolved.config_path.clone(),
-            source,
-        })
-    })?;
-    let raw: RawConfig = toml::from_str(&config_text).map_err(|source| {
-        LoadError::Parse(ParseError::from_toml(
-            &resolved.config_path,
-            &config_text,
-            source,
-        ))
-    })?;
-    let contract = validate::validate(raw, &resolved.repo_root)?;
-
-    Ok(LoadedContract {
-        repo_root: resolved.repo_root,
-        config_path: resolved.config_path,
-        config_bytes,
-        contract,
-    })
 }
