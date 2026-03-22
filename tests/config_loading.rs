@@ -3,6 +3,9 @@ use std::fs;
 use repocert::config::{HookMode, LoadError, LoadOptions, load_contract};
 use tempfile::TempDir;
 
+#[cfg(unix)]
+use std::os::unix::fs as unix_fs;
+
 fn write_repo_file(repo: &TempDir, relative_path: &str, contents: &str) {
     let path = repo.path().join(relative_path);
     if let Some(parent) = path.parent() {
@@ -124,6 +127,36 @@ fn explicit_repo_root_and_config_path_must_match() {
         }
         other => panic!("unexpected error: {other:?}"),
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn canonicalizes_config_path_consistently_across_resolution_modes() {
+    let repo = TempDir::new().unwrap();
+    write_repo_file(&repo, ".repocert/real-config.toml", "schema_version = 1");
+    fs::create_dir_all(repo.path().join("nested/work")).unwrap();
+    unix_fs::symlink(
+        repo.path().join(".repocert/real-config.toml"),
+        repo.path().join(".repocert/config.toml"),
+    )
+    .unwrap();
+
+    let from_repo_root = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap();
+    let from_config_path = load_contract(LoadOptions::from_config_path(
+        repo.path().join(".repocert/config.toml"),
+    ))
+    .unwrap();
+    let from_discovery =
+        load_contract(LoadOptions::discover_from(repo.path().join("nested/work"))).unwrap();
+
+    let canonical_target = repo
+        .path()
+        .join(".repocert/real-config.toml")
+        .canonicalize()
+        .unwrap();
+    assert_eq!(from_repo_root.config_path, canonical_target);
+    assert_eq!(from_config_path.config_path, canonical_target);
+    assert_eq!(from_discovery.config_path, canonical_target);
 }
 
 #[test]

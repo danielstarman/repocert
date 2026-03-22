@@ -17,6 +17,11 @@ pub enum LoadError {
 
 #[derive(Debug, Error)]
 pub enum DiscoveryError {
+    #[error("could not determine the current working directory: {source}")]
+    CurrentDir {
+        #[source]
+        source: std::io::Error,
+    },
     #[error("could not find .repocert/config.toml by walking upward from {start_dir}")]
     ConfigNotFound { start_dir: PathBuf },
     #[error("repo root {path} is invalid: {reason}")]

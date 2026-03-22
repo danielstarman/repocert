@@ -20,9 +20,11 @@ pub(super) fn resolve(options: LoadOptions) -> Result<ResolvedPaths, DiscoveryEr
         (Some(repo_root), None) => resolve_from_repo_root(&repo_root),
         (None, Some(config_path)) => resolve_from_config_path(&config_path),
         (None, None) => {
-            let start_dir = canonicalize_dir(options.start_dir.unwrap_or_else(|| {
-                std::env::current_dir().expect("current_dir should be available")
-            }))?;
+            let start_dir = canonicalize_dir(match options.start_dir {
+                Some(path) => path,
+                None => std::env::current_dir()
+                    .map_err(|source| DiscoveryError::CurrentDir { source })?,
+            })?;
             discover_from(&start_dir)
         }
     }
@@ -31,7 +33,7 @@ pub(super) fn resolve(options: LoadOptions) -> Result<ResolvedPaths, DiscoveryEr
 fn resolve_both(repo_root: &Path, config_path: &Path) -> Result<ResolvedPaths, DiscoveryError> {
     let resolved_repo_root = canonicalize_dir(repo_root)?;
     let resolved_config_path = canonicalize_file(config_path)?;
-    let expected_config_path = resolved_repo_root.join(CONFIG_DIR).join(CONFIG_FILE);
+    let expected_config_path = canonicalize_repo_config_path(&resolved_repo_root)?;
 
     if resolved_config_path != expected_config_path {
         return Err(DiscoveryError::ExplicitPathsMismatch {
@@ -48,7 +50,7 @@ fn resolve_both(repo_root: &Path, config_path: &Path) -> Result<ResolvedPaths, D
 
 fn resolve_from_repo_root(repo_root: &Path) -> Result<ResolvedPaths, DiscoveryError> {
     let resolved_repo_root = canonicalize_dir(repo_root)?;
-    let config_path = resolved_repo_root.join(CONFIG_DIR).join(CONFIG_FILE);
+    let config_path = repo_config_path(&resolved_repo_root);
 
     if !config_path.is_file() {
         return Err(DiscoveryError::MissingConfigAtRepoRoot {
@@ -57,6 +59,8 @@ fn resolve_from_repo_root(repo_root: &Path) -> Result<ResolvedPaths, DiscoveryEr
         });
     }
 
+    let config_path = canonicalize_repo_config_path(&resolved_repo_root)?;
+
     Ok(ResolvedPaths {
         repo_root: resolved_repo_root,
         config_path,
@@ -64,40 +68,31 @@ fn resolve_from_repo_root(repo_root: &Path) -> Result<ResolvedPaths, DiscoveryEr
 }
 
 fn resolve_from_config_path(config_path: &Path) -> Result<ResolvedPaths, DiscoveryError> {
-    let resolved_config_path = canonicalize_file(config_path)?;
-
-    if resolved_config_path
-        .file_name()
-        .and_then(|name| name.to_str())
-        != Some(CONFIG_FILE)
-    {
-        return Err(DiscoveryError::InvalidExplicitConfigPath {
-            path: resolved_config_path,
-            reason: "config file must be named .repocert/config.toml".to_string(),
-        });
-    }
+    validate_explicit_config_slot(config_path)?;
 
     let config_dir =
-        resolved_config_path
+        config_path
             .parent()
             .ok_or_else(|| DiscoveryError::InvalidExplicitConfigPath {
-                path: resolved_config_path.clone(),
+                path: config_path.to_path_buf(),
                 reason: "config file must have a parent directory".to_string(),
             })?;
 
-    if config_dir.file_name().and_then(|name| name.to_str()) != Some(CONFIG_DIR) {
-        return Err(DiscoveryError::InvalidExplicitConfigPath {
-            path: resolved_config_path,
-            reason: "config file must live under a .repocert directory".to_string(),
-        });
-    }
-
     let repo_root = canonicalize_dir(config_dir.parent().ok_or_else(|| {
         DiscoveryError::InvalidExplicitConfigPath {
-            path: resolved_config_path.clone(),
+            path: config_path.to_path_buf(),
             reason: "config file must have a repo root parent".to_string(),
         }
     })?)?;
+    let resolved_config_path = canonicalize_repo_config_path(&repo_root)?;
+    let explicit_config_path = canonicalize_file(config_path)?;
+
+    if explicit_config_path != resolved_config_path {
+        return Err(DiscoveryError::ExplicitPathsMismatch {
+            repo_root,
+            config_path: explicit_config_path,
+        });
+    }
 
     Ok(ResolvedPaths {
         repo_root,
@@ -107,11 +102,11 @@ fn resolve_from_config_path(config_path: &Path) -> Result<ResolvedPaths, Discove
 
 fn discover_from(start_dir: &Path) -> Result<ResolvedPaths, DiscoveryError> {
     for candidate_root in start_dir.ancestors() {
-        let config_path = candidate_root.join(CONFIG_DIR).join(CONFIG_FILE);
+        let config_path = repo_config_path(candidate_root);
         if config_path.is_file() {
             return Ok(ResolvedPaths {
                 repo_root: candidate_root.to_path_buf(),
-                config_path,
+                config_path: canonicalize_repo_config_path(candidate_root)?,
             });
         }
     }
@@ -119,6 +114,39 @@ fn discover_from(start_dir: &Path) -> Result<ResolvedPaths, DiscoveryError> {
     Err(DiscoveryError::ConfigNotFound {
         start_dir: start_dir.to_path_buf(),
     })
+}
+
+fn validate_explicit_config_slot(config_path: &Path) -> Result<(), DiscoveryError> {
+    if config_path.file_name().and_then(|name| name.to_str()) != Some(CONFIG_FILE) {
+        return Err(DiscoveryError::InvalidExplicitConfigPath {
+            path: config_path.to_path_buf(),
+            reason: "config file must be named .repocert/config.toml".to_string(),
+        });
+    }
+
+    let Some(config_dir) = config_path.parent() else {
+        return Err(DiscoveryError::InvalidExplicitConfigPath {
+            path: config_path.to_path_buf(),
+            reason: "config file must have a parent directory".to_string(),
+        });
+    };
+
+    if config_dir.file_name().and_then(|name| name.to_str()) != Some(CONFIG_DIR) {
+        return Err(DiscoveryError::InvalidExplicitConfigPath {
+            path: config_path.to_path_buf(),
+            reason: "config file must live under a .repocert directory".to_string(),
+        });
+    }
+
+    Ok(())
+}
+
+fn repo_config_path(repo_root: &Path) -> PathBuf {
+    repo_root.join(CONFIG_DIR).join(CONFIG_FILE)
+}
+
+fn canonicalize_repo_config_path(repo_root: &Path) -> Result<PathBuf, DiscoveryError> {
+    canonicalize_file(repo_config_path(repo_root))
 }
 
 fn canonicalize_dir(path: impl AsRef<Path>) -> Result<PathBuf, DiscoveryError> {
