@@ -266,25 +266,3 @@ certify = true
     assert!(first.is_none());
     assert!(second.is_some());
 }
-
-#[test]
-fn certify_current_repo_default_profile_returns_selection_error() {
-    // Arrange
-    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-
-    // Act
-    let output = run_certify(
-        &[
-            "--repo-root",
-            repo_root.to_str().unwrap(),
-            "--format",
-            "json",
-        ],
-        repo_root,
-    );
-
-    // Assert
-    assert_eq!(output.status.code(), Some(1));
-    let json: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(json["error"]["category"], "selection");
-}

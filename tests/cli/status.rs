@@ -20,7 +20,7 @@ fn run_status(args: &[&str], cwd: &Path) -> std::process::Output {
 }
 
 #[test]
-fn status_current_repo_returns_observational_empty_success() {
+fn status_current_repo_reports_default_profile_and_main_protection() {
     // Arrange
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
 
@@ -39,7 +39,9 @@ fn status_current_repo_returns_observational_empty_success() {
     assert_eq!(output.status.code(), Some(0));
     let json: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["ok"], true);
-    assert_eq!(json["profiles"], serde_json::json!([]));
+    assert_eq!(json["profiles"], serde_json::json!(["default"]));
+    assert_eq!(json["protected_refs"][0]["pattern"], "refs/heads/main");
+    assert_eq!(json["protected_refs"][0]["profile"], "default");
 }
 
 #[test]
