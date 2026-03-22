@@ -55,6 +55,16 @@ If they diverge:
 - Keep storage, validation, execution, and presentation concerns distinct.
 - Prefer clear, inspectable behavior over cleverness.
 - Do not treat passing tests alone as sufficient if intended semantics would be violated.
+- Use `mod.rs` as a facade, not as a home for growing implementation logic.
+- Avoid dangling root-level internal helpers; prefer small internal namespaces that match the domain they serve.
+- When the same semantic concept appears in multiple places, prefer promoting it into a named model over repeating ad hoc field pairs.
+- Keep shared mechanism separate from command-specific semantics; reusable execution or integration layers should not live under command-owned modules unless they are truly command-specific.
+- When extracting shared behavior, prefer the narrowest honest seam over generic frameworks or “render anything / do anything” abstractions.
+
+## Issue Hygiene
+
+- If a PR closes an issue via GitHub automation, rely on that closure.
+- If work lands directly on `main`, close the issue explicitly and leave a short note pointing to the landing commit.
 
 ## Agent Behavior
 
