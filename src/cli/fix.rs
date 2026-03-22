@@ -2,28 +2,25 @@ use std::process::ExitCode;
 
 use serde_json::{Map, Value, json};
 
-use repocert::check::{
-    CheckError, CheckItemKind, CheckOptions, CheckOutcome, CheckReport, CheckSelectionMode,
-    run_check,
-};
 use repocert::config::LoadError;
+use repocert::fix::{FixError, FixOptions, FixOutcome, FixReport, FixSelectionMode, run_fix};
 
-use super::app::{CheckArgs, OutputFormat};
+use super::app::{FixArgs, OutputFormat};
 use super::json::{command_error, command_success};
 
-pub(super) fn run(args: CheckArgs) -> ExitCode {
-    let options = CheckOptions {
+pub(super) fn run(args: FixArgs) -> ExitCode {
+    let options = FixOptions {
         load_options: repocert::config::LoadOptions {
             start_dir: None,
             repo_root: args.repo_root,
             config_path: args.config_path,
         },
-        profiles: args.profile,
+        profile: args.profile,
         names: args.name,
         emit_progress: true,
     };
 
-    match run_check(options) {
+    match run_fix(options) {
         Ok(report) => {
             match args.format {
                 OutputFormat::Human => render_human_success(&report),
@@ -46,20 +43,20 @@ pub(super) fn run(args: CheckArgs) -> ExitCode {
     }
 }
 
-fn render_human_success(report: &CheckReport) {
+fn render_human_success(report: &FixReport) {
     let overall = if report.ok() { "PASS" } else { "FAIL" };
-    println!("{overall} check");
+    println!("{overall} fix");
     println!("repo_root: {}", report.paths.repo_root.display());
     println!("config_path: {}", report.paths.config_path.display());
     println!(
         "selection_mode: {}",
         selection_mode_label(&report.selection_mode)
     );
-    if !report.profiles.is_empty() {
-        println!("profiles: {}", report.profiles.join(", "));
+    if let Some(profile) = &report.profile {
+        println!("profile: {profile}");
     }
-    if !report.checks.is_empty() {
-        println!("checks: {}", report.checks.join(", "));
+    if !report.fixers.is_empty() {
+        println!("fixers: {}", report.fixers.join(", "));
     }
 
     for result in &report.results {
@@ -69,8 +66,7 @@ fn render_human_success(report: &CheckReport) {
             .or_else(|| result.message.as_ref().map(|message| format!(" {message}")))
             .unwrap_or_default();
         println!(
-            "- {} {} {} ({} ms){}",
-            item_kind_label(&result.kind),
+            "- fixer {} {} ({} ms){}",
             result.name,
             outcome_label(&result.outcome),
             result.duration_ms,
@@ -79,23 +75,19 @@ fn render_human_success(report: &CheckReport) {
     }
 
     println!(
-        "summary: total={} pass={} fail={} timeout={} repair_needed={}",
-        report.summary.total,
-        report.summary.pass,
-        report.summary.fail,
-        report.summary.timeout,
-        report.summary.repair_needed
+        "summary: total={} pass={} fail={} timeout={}",
+        report.summary.total, report.summary.pass, report.summary.fail, report.summary.timeout
     );
 }
 
-fn render_json_success(report: &CheckReport) {
+fn render_json_success(report: &FixReport) {
     let mut command_fields = Map::new();
     command_fields.insert(
         "selection_mode".to_string(),
         Value::String(selection_mode_label(&report.selection_mode).to_string()),
     );
-    command_fields.insert("profiles".to_string(), json!(report.profiles));
-    command_fields.insert("checks".to_string(), json!(report.checks));
+    command_fields.insert("profile".to_string(), json!(report.profile));
+    command_fields.insert("fixers".to_string(), json!(report.fixers));
     command_fields.insert(
         "results".to_string(),
         Value::Array(
@@ -105,7 +97,6 @@ fn render_json_success(report: &CheckReport) {
                 .map(|result| {
                     json!({
                         "name": result.name,
-                        "kind": item_kind_label(&result.kind),
                         "outcome": outcome_label(&result.outcome),
                         "exit_code": result.exit_code,
                         "duration_ms": result.duration_ms,
@@ -122,25 +113,25 @@ fn render_json_success(report: &CheckReport) {
             "pass": report.summary.pass,
             "fail": report.summary.fail,
             "timeout": report.summary.timeout,
-            "repair_needed": report.summary.repair_needed,
         }),
     );
+    command_fields.insert("error".to_string(), Value::Null);
 
-    let output = command_success("check", &report.paths, command_fields);
+    let output = command_success("fix", &report.paths, command_fields);
     println!(
         "{}",
         serde_json::to_string(&output).expect("JSON serialization should succeed")
     );
 }
 
-fn render_human_error(error: &CheckError) {
-    eprintln!("FAIL check [{}]", error_category(error));
+fn render_human_error(error: &FixError) {
+    eprintln!("FAIL fix [{}]", error_category(error));
     eprintln!("{error}");
 }
 
-fn render_json_error(error: &CheckError) {
+fn render_json_error(error: &FixError) {
     let output = command_error(
-        "check",
+        "fix",
         error.paths(),
         error_category(error),
         error.to_string(),
@@ -152,36 +143,28 @@ fn render_json_error(error: &CheckError) {
     );
 }
 
-fn error_category(error: &CheckError) -> &'static str {
+fn error_category(error: &FixError) -> &'static str {
     match error {
-        CheckError::Load(failure) => match &failure.error {
+        FixError::Load(failure) => match &failure.error {
             LoadError::Discovery(_) => "discovery",
             LoadError::Parse(_) => "parse",
             LoadError::Validation(_) => "validation",
         },
-        CheckError::Selection { .. } => "selection",
+        FixError::Selection { .. } => "selection",
     }
 }
 
-fn selection_mode_label(mode: &CheckSelectionMode) -> &'static str {
+fn selection_mode_label(mode: &FixSelectionMode) -> &'static str {
     match mode {
-        CheckSelectionMode::Profiles => "profiles",
-        CheckSelectionMode::Checks => "checks",
+        FixSelectionMode::Profile => "profile",
+        FixSelectionMode::Fixers => "fixers",
     }
 }
 
-fn item_kind_label(kind: &CheckItemKind) -> &'static str {
-    match kind {
-        CheckItemKind::Check => "check",
-        CheckItemKind::FixerProbe => "fixer_probe",
-    }
-}
-
-fn outcome_label(outcome: &CheckOutcome) -> &'static str {
+fn outcome_label(outcome: &FixOutcome) -> &'static str {
     match outcome {
-        CheckOutcome::Pass => "pass",
-        CheckOutcome::Fail => "fail",
-        CheckOutcome::Timeout => "timeout",
-        CheckOutcome::RepairNeeded => "repair_needed",
+        FixOutcome::Pass => "pass",
+        FixOutcome::Fail => "fail",
+        FixOutcome::Timeout => "timeout",
     }
 }
