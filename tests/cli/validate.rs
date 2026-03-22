@@ -132,6 +132,35 @@ fn validate_invalid_schema_returns_human_failure_output() {
 }
 
 #[test]
+fn validate_invalid_schema_json_failure_returns_resolved_paths() {
+    // Arrange
+    let repo = TempDir::new().unwrap();
+    write_repo_file(&repo, ".repocert/config.toml", "schema_version = 2");
+
+    // Act
+    let output = run_validate(&["--format", "json"], repo.path());
+
+    // Assert
+    assert_eq!(output.status.code(), Some(1));
+    let json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["ok"], false);
+    assert_eq!(json["error"]["category"], "validation");
+    assert_eq!(
+        json["repo_root"],
+        repo.path().canonicalize().unwrap().display().to_string()
+    );
+    assert_eq!(
+        json["config_path"],
+        repo.path()
+            .join(".repocert/config.toml")
+            .canonicalize()
+            .unwrap()
+            .display()
+            .to_string()
+    );
+}
+
+#[test]
 fn validate_does_not_execute_declared_commands() {
     // Arrange
     let repo = TempDir::new().unwrap();

@@ -5,7 +5,7 @@ use std::process::ExitCode;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde_json::json;
 
-use repocert::config::{DiscoveryError, LoadError, LoadOptions, ParseError, load_contract};
+use repocert::config::{LoadError, LoadOptions, load_contract};
 
 #[derive(Debug, Parser)]
 #[command(name = "repocert")]
@@ -62,15 +62,15 @@ fn run_validate(args: ValidateArgs) -> ExitCode {
             match args.format {
                 OutputFormat::Human => {
                     println!("PASS validate");
-                    println!("repo_root: {}", loaded.repo_root.display());
-                    println!("config_path: {}", loaded.config_path.display());
+                    println!("repo_root: {}", loaded.paths.repo_root.display());
+                    println!("config_path: {}", loaded.paths.config_path.display());
                 }
                 OutputFormat::Json => {
                     let output = json!({
                         "ok": true,
                         "command": "validate",
-                        "repo_root": path_string(&loaded.repo_root),
-                        "config_path": path_string(&loaded.config_path),
+                        "repo_root": path_string(&loaded.paths.repo_root),
+                        "config_path": path_string(&loaded.paths.config_path),
                     });
                     println!(
                         "{}",
@@ -80,14 +80,21 @@ fn run_validate(args: ValidateArgs) -> ExitCode {
             }
             ExitCode::SUCCESS
         }
-        Err(error) => {
-            let category = error_category(&error);
-            let (repo_root, config_path) = error_paths(&error);
+        Err(failure) => {
+            let category = error_category(&failure.error);
+            let repo_root = failure
+                .paths
+                .as_ref()
+                .map(|paths| path_string(&paths.repo_root));
+            let config_path = failure
+                .paths
+                .as_ref()
+                .map(|paths| path_string(&paths.config_path));
 
             match args.format {
                 OutputFormat::Human => {
                     eprintln!("FAIL validate [{category}]");
-                    eprintln!("{error}");
+                    eprintln!("{}", failure.error);
                 }
                 OutputFormat::Json => {
                     let output = json!({
@@ -97,7 +104,7 @@ fn run_validate(args: ValidateArgs) -> ExitCode {
                         "config_path": config_path.as_deref(),
                         "error": {
                             "category": category,
-                            "message": error.to_string(),
+                            "message": failure.error.to_string(),
                         },
                     });
                     println!(
@@ -117,39 +124,6 @@ fn error_category(error: &LoadError) -> &'static str {
         LoadError::Discovery(_) => "discovery",
         LoadError::Parse(_) => "parse",
         LoadError::Validation(_) => "validation",
-    }
-}
-
-fn error_paths(error: &LoadError) -> (Option<String>, Option<String>) {
-    match error {
-        LoadError::Discovery(error) => discovery_error_paths(error),
-        LoadError::Parse(error) => parse_error_paths(error),
-        LoadError::Validation(_) => (None, None),
-    }
-}
-
-fn discovery_error_paths(error: &DiscoveryError) -> (Option<String>, Option<String>) {
-    match error {
-        DiscoveryError::MissingConfigAtRepoRoot {
-            repo_root,
-            config_path,
-        } => (Some(path_string(repo_root)), Some(path_string(config_path))),
-        DiscoveryError::ExplicitPathsMismatch {
-            repo_root,
-            config_path,
-        } => (Some(path_string(repo_root)), Some(path_string(config_path))),
-        DiscoveryError::InvalidRepoRoot { path, .. } => (Some(path_string(path)), None),
-        DiscoveryError::InvalidExplicitConfigPath { path, .. } => (None, Some(path_string(path))),
-        DiscoveryError::Io { path, .. } => (None, Some(path_string(path))),
-        DiscoveryError::ConfigNotFound { .. } | DiscoveryError::CurrentDir { .. } => (None, None),
-    }
-}
-
-fn parse_error_paths(error: &ParseError) -> (Option<String>, Option<String>) {
-    match error {
-        ParseError::InvalidUtf8 { path, .. } | ParseError::InvalidToml { path, .. } => {
-            (None, Some(path_string(path)))
-        }
     }
 }
 

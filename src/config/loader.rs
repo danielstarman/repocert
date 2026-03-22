@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use super::discovery;
 use super::error::{DiscoveryError, LoadError, ParseError};
-use super::model::LoadedContract;
+use super::model::{LoadPaths, LoadedContract};
 use super::raw::RawConfig;
 use super::validate;
 
@@ -40,32 +40,58 @@ impl LoadOptions {
     }
 }
 
-pub fn load_contract(options: LoadOptions) -> Result<LoadedContract, LoadError> {
-    let resolved = discovery::resolve(options)?;
-    let config_bytes = fs::read(&resolved.config_path).map_err(|source| {
-        LoadError::Discovery(DiscoveryError::Io {
-            path: resolved.config_path.clone(),
-            source,
-        })
+#[derive(Debug)]
+pub struct LoadFailure {
+    pub paths: Option<LoadPaths>,
+    pub error: LoadError,
+}
+
+impl std::fmt::Display for LoadFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.error.fmt(f)
+    }
+}
+
+impl std::error::Error for LoadFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
+    }
+}
+
+pub fn load_contract(options: LoadOptions) -> Result<LoadedContract, LoadFailure> {
+    let paths = discovery::resolve(options).map_err(|error| LoadFailure {
+        paths: None,
+        error: LoadError::Discovery(error),
     })?;
-    let config_text = String::from_utf8(config_bytes.clone()).map_err(|source| {
-        LoadError::Parse(ParseError::InvalidUtf8 {
-            path: resolved.config_path.clone(),
+    let config_bytes = fs::read(&paths.config_path).map_err(|source| LoadFailure {
+        paths: Some(paths.clone()),
+        error: LoadError::Discovery(DiscoveryError::Io {
+            path: paths.config_path.clone(),
             source,
-        })
+        }),
     })?;
-    let raw: RawConfig = toml::from_str(&config_text).map_err(|source| {
-        LoadError::Parse(ParseError::from_toml(
-            &resolved.config_path,
+    let config_text = String::from_utf8(config_bytes.clone()).map_err(|source| LoadFailure {
+        paths: Some(paths.clone()),
+        error: LoadError::Parse(ParseError::InvalidUtf8 {
+            path: paths.config_path.clone(),
+            source,
+        }),
+    })?;
+    let raw: RawConfig = toml::from_str(&config_text).map_err(|source| LoadFailure {
+        paths: Some(paths.clone()),
+        error: LoadError::Parse(ParseError::from_toml(
+            &paths.config_path,
             &config_text,
             source,
-        ))
+        )),
     })?;
-    let contract = validate::validate(raw, &resolved.repo_root)?;
+    let contract = validate::validate(raw, &paths.repo_root).map_err(|error| LoadFailure {
+        paths: Some(paths.clone()),
+        error,
+    })?;
 
     Ok(LoadedContract {
-        repo_root: resolved.repo_root,
-        config_path: resolved.config_path,
+        paths,
         config_bytes,
         contract,
     })
