@@ -13,3 +13,8 @@ probe_argv = ["cargo", "fmt", "--check"]
 [profiles.default]
 checks = ["fmt", "test"]
 fixers = ["fmt"]
+certify = true
+
+[[protected_refs]]
+pattern = "refs/heads/main"
+profile = "default"
