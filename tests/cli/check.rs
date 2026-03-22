@@ -247,3 +247,31 @@ default = true
             .contains("failed to spawn command")
     );
 }
+
+#[test]
+fn check_current_repo_named_fmt_returns_success() {
+    // Arrange
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+
+    // Act
+    let output = run_check(
+        &[
+            "--repo-root",
+            repo_root.to_str().unwrap(),
+            "--name",
+            "fmt",
+            "--format",
+            "json",
+        ],
+        repo_root,
+    );
+
+    // Assert
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["ok"], true);
+    assert_eq!(json["selection_mode"], "checks");
+    assert_eq!(json["checks"], serde_json::json!(["fmt"]));
+    assert_eq!(json["results"][0]["name"], "fmt");
+    assert_eq!(json["results"][0]["outcome"], "pass");
+}
