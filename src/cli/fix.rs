@@ -81,14 +81,14 @@ fn render_human_success(report: &FixReport) {
 }
 
 fn render_json_success(report: &FixReport) {
-    let mut extra = Map::new();
-    extra.insert(
+    let mut command_fields = Map::new();
+    command_fields.insert(
         "selection_mode".to_string(),
         Value::String(selection_mode_label(&report.selection_mode).to_string()),
     );
-    extra.insert("profile".to_string(), json!(report.profile));
-    extra.insert("fixers".to_string(), json!(report.fixers));
-    extra.insert(
+    command_fields.insert("profile".to_string(), json!(report.profile));
+    command_fields.insert("fixers".to_string(), json!(report.fixers));
+    command_fields.insert(
         "results".to_string(),
         Value::Array(
             report
@@ -106,7 +106,7 @@ fn render_json_success(report: &FixReport) {
                 .collect(),
         ),
     );
-    extra.insert(
+    command_fields.insert(
         "summary".to_string(),
         json!({
             "total": report.summary.total,
@@ -115,9 +115,9 @@ fn render_json_success(report: &FixReport) {
             "timeout": report.summary.timeout,
         }),
     );
-    extra.insert("error".to_string(), Value::Null);
+    command_fields.insert("error".to_string(), Value::Null);
 
-    let output = command_success("fix", &report.paths, extra);
+    let output = command_success("fix", &report.paths, command_fields);
     println!(
         "{}",
         serde_json::to_string(&output).expect("JSON serialization should succeed")

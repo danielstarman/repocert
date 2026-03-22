@@ -89,14 +89,14 @@ fn render_human_success(report: &CheckReport) {
 }
 
 fn render_json_success(report: &CheckReport) {
-    let mut extra = Map::new();
-    extra.insert(
+    let mut command_fields = Map::new();
+    command_fields.insert(
         "selection_mode".to_string(),
         Value::String(selection_mode_label(&report.selection_mode).to_string()),
     );
-    extra.insert("profiles".to_string(), json!(report.profiles));
-    extra.insert("checks".to_string(), json!(report.checks));
-    extra.insert(
+    command_fields.insert("profiles".to_string(), json!(report.profiles));
+    command_fields.insert("checks".to_string(), json!(report.checks));
+    command_fields.insert(
         "results".to_string(),
         Value::Array(
             report
@@ -115,7 +115,7 @@ fn render_json_success(report: &CheckReport) {
                 .collect(),
         ),
     );
-    extra.insert(
+    command_fields.insert(
         "summary".to_string(),
         json!({
             "total": report.summary.total,
@@ -126,7 +126,7 @@ fn render_json_success(report: &CheckReport) {
         }),
     );
 
-    let output = command_success("check", &report.paths, extra);
+    let output = command_success("check", &report.paths, command_fields);
     println!(
         "{}",
         serde_json::to_string(&output).expect("JSON serialization should succeed")

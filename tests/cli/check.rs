@@ -44,7 +44,7 @@ checks = ["alpha"]
 fixers = ["format"]
 default = true
 
-[profiles.extra]
+[profiles.extended]
 includes = ["base"]
 checks = ["beta"]
 "#,
