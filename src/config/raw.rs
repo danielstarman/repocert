@@ -28,11 +28,9 @@ pub(super) struct RawCommand {
 
 #[derive(Debug, Deserialize)]
 pub(super) struct RawFixer {
-    pub argv: Vec<String>,
+    #[serde(flatten)]
+    pub command: RawCommand,
     pub probe_argv: Option<Vec<String>>,
-    #[serde(default)]
-    pub env: BTreeMap<String, String>,
-    pub timeout_ms: Option<u64>,
     pub probe_timeout_ms: Option<u64>,
 }
 

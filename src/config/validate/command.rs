@@ -31,11 +31,38 @@ fn validate_command(
     command: &RawCommand,
     issues: &mut Vec<ValidationIssue>,
 ) -> CommandSpec {
-    validate_name("checks", name, issues);
-    validate_argv(&format!("checks.{name}.argv"), &command.argv, issues);
-    validate_env_keys(&format!("checks.{name}.env"), &command.env, issues);
+    validate_exec_command("checks", name, command, issues)
+}
+
+fn validate_fixer(name: &str, fixer: &RawFixer, issues: &mut Vec<ValidationIssue>) -> FixerSpec {
+    let command = validate_exec_command("fixers", name, &fixer.command, issues);
+    if let Some(probe_argv) = &fixer.probe_argv {
+        validate_argv(&format!("fixers.{name}.probe_argv"), probe_argv, issues);
+    }
     validate_timeout(
-        &format!("checks.{name}.timeout_ms"),
+        &format!("fixers.{name}.probe_timeout_ms"),
+        fixer.probe_timeout_ms,
+        issues,
+    );
+
+    FixerSpec {
+        command,
+        probe_argv: fixer.probe_argv.clone(),
+        probe_timeout_ms: fixer.probe_timeout_ms,
+    }
+}
+
+fn validate_exec_command(
+    section: &str,
+    name: &str,
+    command: &RawCommand,
+    issues: &mut Vec<ValidationIssue>,
+) -> CommandSpec {
+    validate_name(section, name, issues);
+    validate_argv(&format!("{section}.{name}.argv"), &command.argv, issues);
+    validate_env_keys(&format!("{section}.{name}.env"), &command.env, issues);
+    validate_timeout(
+        &format!("{section}.{name}.timeout_ms"),
         command.timeout_ms,
         issues,
     );
@@ -44,32 +71,5 @@ fn validate_command(
         argv: command.argv.clone(),
         env: command.env.clone(),
         timeout_ms: command.timeout_ms,
-    }
-}
-
-fn validate_fixer(name: &str, fixer: &RawFixer, issues: &mut Vec<ValidationIssue>) -> FixerSpec {
-    validate_name("fixers", name, issues);
-    validate_argv(&format!("fixers.{name}.argv"), &fixer.argv, issues);
-    if let Some(probe_argv) = &fixer.probe_argv {
-        validate_argv(&format!("fixers.{name}.probe_argv"), probe_argv, issues);
-    }
-    validate_env_keys(&format!("fixers.{name}.env"), &fixer.env, issues);
-    validate_timeout(
-        &format!("fixers.{name}.timeout_ms"),
-        fixer.timeout_ms,
-        issues,
-    );
-    validate_timeout(
-        &format!("fixers.{name}.probe_timeout_ms"),
-        fixer.probe_timeout_ms,
-        issues,
-    );
-
-    FixerSpec {
-        argv: fixer.argv.clone(),
-        probe_argv: fixer.probe_argv.clone(),
-        env: fixer.env.clone(),
-        timeout_ms: fixer.timeout_ms,
-        probe_timeout_ms: fixer.probe_timeout_ms,
     }
 }

@@ -31,10 +31,8 @@ pub struct CommandSpec {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FixerSpec {
-    pub argv: Vec<String>,
+    pub command: CommandSpec,
     pub probe_argv: Option<Vec<String>>,
-    pub env: BTreeMap<String, String>,
-    pub timeout_ms: Option<u64>,
     pub probe_timeout_ms: Option<u64>,
 }
 
