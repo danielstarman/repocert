@@ -1,3 +1,4 @@
+pub mod certification;
 pub mod check;
 pub mod config;
 mod contract;
