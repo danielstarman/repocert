@@ -46,7 +46,7 @@ protected_paths = ["../outside.txt"]
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
     // Assert
-    match error {
+    match error.error {
         LoadError::Validation(errors) => assert!(errors.to_string().contains("escape")),
         other => panic!("unexpected error: {other:?}"),
     }

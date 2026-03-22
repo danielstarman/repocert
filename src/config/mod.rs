@@ -8,8 +8,8 @@ mod validate;
 pub use error::{
     DiscoveryError, LoadError, ParseError, ValidationErrorKind, ValidationErrors, ValidationIssue,
 };
-pub use loader::{LoadOptions, load_contract};
+pub use loader::{LoadFailure, LoadOptions, load_contract};
 pub use model::{
-    CommandSpec, Contract, FixerSpec, HookMode, HooksConfig, LoadedContract, Profile, ProtectedRef,
-    RepoPath,
+    CommandSpec, Contract, FixerSpec, HookMode, HooksConfig, LoadPaths, LoadedContract, Profile,
+    ProtectedRef, RepoPath,
 };

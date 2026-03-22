@@ -2,9 +2,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct LoadedContract {
+pub struct LoadPaths {
     pub repo_root: PathBuf,
     pub config_path: PathBuf,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LoadedContract {
+    pub paths: LoadPaths,
     pub config_bytes: Vec<u8>,
     pub contract: Contract,
 }
