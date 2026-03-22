@@ -11,7 +11,22 @@ pub(super) struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub(super) enum Commands {
+    Check(CheckArgs),
     Validate(ValidateArgs),
+}
+
+#[derive(Debug, Args)]
+pub(super) struct CheckArgs {
+    #[arg(long = "repo-root")]
+    pub repo_root: Option<PathBuf>,
+    #[arg(long = "config-path")]
+    pub config_path: Option<PathBuf>,
+    #[arg(long, value_enum, default_value_t = OutputFormat::Human)]
+    pub format: OutputFormat,
+    #[arg(long = "profile")]
+    pub profile: Vec<String>,
+    #[arg(long = "name")]
+    pub name: Vec<String>,
 }
 
 #[derive(Debug, Args)]
