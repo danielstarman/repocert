@@ -126,7 +126,7 @@ fn render_json_success(report: &CheckReport) {
         }),
     );
 
-    let output = command_success("check", &report.paths, command_fields);
+    let output = command_success("check", &report.paths, report.ok(), command_fields);
     println!(
         "{}",
         serde_json::to_string(&output).expect("JSON serialization should succeed")

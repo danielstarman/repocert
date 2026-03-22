@@ -7,10 +7,11 @@ use repocert::config::LoadPaths;
 pub(super) fn command_success(
     command: &str,
     paths: &LoadPaths,
+    ok: bool,
     command_fields: impl Into<Map<String, Value>>,
 ) -> Value {
     let mut object = base_object(command, Some(paths));
-    object.insert("ok".to_string(), Value::Bool(true));
+    object.insert("ok".to_string(), Value::Bool(ok));
     object.extend(command_fields.into());
     Value::Object(object)
 }

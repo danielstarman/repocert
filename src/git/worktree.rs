@@ -1,15 +1,26 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::io;
 use std::path::Path;
 use std::process::Command;
+
+use thiserror::Error;
 
 use crate::config::Contract;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub(crate) struct GitStatusSnapshot {
+pub(crate) struct GitWorktreeSnapshot {
     entries: BTreeMap<String, String>,
 }
 
-impl GitStatusSnapshot {
+impl GitWorktreeSnapshot {
+    pub(crate) fn is_clean(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    pub(crate) fn paths(&self) -> Vec<String> {
+        self.entries.keys().cloned().collect()
+    }
+
     pub(crate) fn changed_paths(&self, other: &Self) -> Vec<String> {
         let mut paths = BTreeSet::new();
         paths.extend(self.entries.keys().cloned());
@@ -20,6 +31,17 @@ impl GitStatusSnapshot {
             .filter(|path| self.entries.get(path) != other.entries.get(path))
             .collect()
     }
+}
+
+#[derive(Debug, Error)]
+pub enum GitWorktreeError {
+    #[error("failed to run git status")]
+    Io {
+        #[source]
+        source: io::Error,
+    },
+    #[error("git status failed: {message}")]
+    CommandFailed { message: String },
 }
 
 pub(crate) fn protected_pathspecs(contract: &Contract) -> Vec<String> {
@@ -33,10 +55,10 @@ pub(crate) fn protected_pathspecs(contract: &Contract) -> Vec<String> {
     pathspecs
 }
 
-pub(crate) fn capture_snapshot(
+pub(crate) fn capture_pathspec_snapshot(
     repo_root: &Path,
     pathspecs: &[String],
-) -> Result<GitStatusSnapshot, String> {
+) -> Result<GitWorktreeSnapshot, GitWorktreeError> {
     let mut command = Command::new("git");
     command.current_dir(repo_root);
     command.args([
@@ -45,31 +67,40 @@ pub(crate) fn capture_snapshot(
         "--porcelain=v1",
         "-z",
         "--untracked-files=all",
-        "--",
     ]);
-    command.args(pathspecs);
+    if !pathspecs.is_empty() {
+        command.arg("--");
+        command.args(pathspecs);
+    }
 
     let output = command
         .output()
-        .map_err(|error| format!("failed to run git status: {error}"))?;
+        .map_err(|source| GitWorktreeError::Io { source })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let message = stderr.trim();
-        return Err(if message.is_empty() {
+        let message = if message.is_empty() {
             format!(
                 "git status failed with exit code {:?}",
                 output.status.code()
             )
         } else {
-            format!("git status failed: {message}")
-        });
+            message.to_string()
+        };
+        return Err(GitWorktreeError::CommandFailed { message });
     }
 
     Ok(parse_porcelain_v1_z(&output.stdout))
 }
 
-fn parse_porcelain_v1_z(output: &[u8]) -> GitStatusSnapshot {
+pub(crate) fn capture_worktree_snapshot(
+    repo_root: &Path,
+) -> Result<GitWorktreeSnapshot, GitWorktreeError> {
+    capture_pathspec_snapshot(repo_root, &[])
+}
+
+fn parse_porcelain_v1_z(output: &[u8]) -> GitWorktreeSnapshot {
     let mut entries = BTreeMap::new();
     let mut fields = output
         .split(|byte| *byte == 0)
@@ -92,5 +123,5 @@ fn parse_porcelain_v1_z(output: &[u8]) -> GitStatusSnapshot {
         }
     }
 
-    GitStatusSnapshot { entries }
+    GitWorktreeSnapshot { entries }
 }

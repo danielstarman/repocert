@@ -1,24 +1,17 @@
 use crate::check::error::CheckSelectionError;
-use crate::check::types::{CheckItemKind, CheckSelectionMode};
-use crate::config::{CommandSpec, Contract, FixerSpec};
+use crate::check::types::CheckSelectionMode;
+use crate::config::Contract;
 use crate::contract::{
-    SelectionError, collect_effective_checks, collect_effective_fixers, resolve_named_checks,
-    resolve_profiles,
+    EvaluationItem, EvaluationItemKind, SelectionError, build_profile_evaluation_plan,
+    resolve_named_checks, resolve_profiles,
 };
-
-#[derive(Clone, Debug)]
-pub(super) struct PlannedItem {
-    pub name: String,
-    pub kind: CheckItemKind,
-    pub command: CommandSpec,
-}
 
 #[derive(Clone, Debug)]
 pub(super) struct SelectionPlan {
     pub selection_mode: CheckSelectionMode,
     pub profiles: Vec<String>,
     pub checks: Vec<String>,
-    pub items: Vec<PlannedItem>,
+    pub items: Vec<EvaluationItem>,
 }
 
 pub(super) fn build_selection_plan(
@@ -51,9 +44,9 @@ fn build_named_check_plan(
 
     let items = selected_checks
         .iter()
-        .map(|name| PlannedItem {
+        .map(|name| EvaluationItem {
             name: name.clone(),
-            kind: CheckItemKind::Check,
+            kind: EvaluationItemKind::Check,
             command: contract
                 .checks
                 .get(name)
@@ -76,27 +69,24 @@ fn build_profile_plan(
 ) -> Result<SelectionPlan, CheckSelectionError> {
     let profiles =
         resolve_profiles(contract, requested_profiles).map_err(CheckSelectionError::from)?;
-    let checks = collect_effective_checks(contract, &profiles);
-    let fixer_names = collect_effective_fixers(contract, &profiles);
+    let mut checks = Vec::new();
+    let mut items = Vec::new();
 
-    let mut items = checks
-        .iter()
-        .map(|name| PlannedItem {
-            name: name.clone(),
-            kind: CheckItemKind::Check,
-            command: contract
-                .checks
-                .get(name)
-                .expect("selected check should exist")
-                .clone(),
-        })
-        .collect::<Vec<_>>();
-
-    items.extend(
-        fixer_names
-            .iter()
-            .map(|name| build_probe_item(name, contract)),
-    );
+    for profile in &profiles {
+        let plan = build_profile_evaluation_plan(contract, profile);
+        for check in plan.checks {
+            if !checks.contains(&check) {
+                checks.push(check);
+            }
+        }
+        for item in plan.items {
+            if !items.iter().any(|existing: &EvaluationItem| {
+                existing.name == item.name && existing.kind == item.kind
+            }) {
+                items.push(item);
+            }
+        }
+    }
 
     Ok(SelectionPlan {
         selection_mode: CheckSelectionMode::Profiles,
@@ -104,28 +94,4 @@ fn build_profile_plan(
         checks,
         items,
     })
-}
-
-fn build_probe_item(name: &str, contract: &Contract) -> PlannedItem {
-    let fixer = contract
-        .fixers
-        .get(name)
-        .expect("selected fixer should exist after validation");
-
-    PlannedItem {
-        name: name.to_string(),
-        kind: CheckItemKind::FixerProbe,
-        command: probe_command_spec(fixer),
-    }
-}
-
-fn probe_command_spec(fixer: &FixerSpec) -> CommandSpec {
-    CommandSpec {
-        argv: fixer
-            .probe_argv
-            .clone()
-            .expect("profile-selected fixer probes are validated"),
-        env: fixer.command.env.clone(),
-        timeout_ms: fixer.probe_timeout_ms.or(fixer.command.timeout_ms),
-    }
 }

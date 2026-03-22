@@ -1,52 +1,38 @@
 use std::path::Path;
 
 use crate::check::types::{CheckItemKind, CheckItemResult, CheckOutcome};
-use crate::exec::{CommandRunnerOptions, CommandRunnerStatus, run_command};
+use crate::contract::{
+    EvaluationItem, EvaluationItemKind, EvaluationItemResult, EvaluationOutcome,
+    run_evaluation_item,
+};
 
-use super::plan::PlannedItem;
+pub(super) fn run_planned_item(repo_root: &Path, item: &EvaluationItem) -> CheckItemResult {
+    map_result(run_evaluation_item(repo_root, item))
+}
 
-pub(super) fn run_planned_item(repo_root: &Path, item: &PlannedItem) -> CheckItemResult {
-    let execution = run_command(
-        repo_root,
-        &CommandRunnerOptions {
-            argv: item.command.argv.clone(),
-            env: item.command.env.clone(),
-            timeout_ms: item.command.timeout_ms,
-        },
-    );
-
-    let (outcome, exit_code) = classify_execution(&item.kind, &execution.status);
-
+fn map_result(result: EvaluationItemResult) -> CheckItemResult {
     CheckItemResult {
-        name: item.name.clone(),
-        kind: item.kind.clone(),
-        outcome,
-        exit_code,
-        duration_ms: execution.duration_ms,
-        message: execution.message,
+        name: result.name,
+        kind: map_kind(result.kind),
+        outcome: map_outcome(result.outcome),
+        exit_code: result.exit_code,
+        duration_ms: result.duration_ms,
+        message: result.message,
     }
 }
 
-fn classify_execution(
-    kind: &CheckItemKind,
-    status: &CommandRunnerStatus,
-) -> (CheckOutcome, Option<i32>) {
-    match status {
-        CommandRunnerStatus::TimedOut => (CheckOutcome::Timeout, None),
-        CommandRunnerStatus::Exited { exit_code } => (classify_exit(kind, *exit_code), *exit_code),
-    }
-}
-
-fn classify_exit(kind: &CheckItemKind, exit_code: Option<i32>) -> CheckOutcome {
+fn map_kind(kind: EvaluationItemKind) -> CheckItemKind {
     match kind {
-        CheckItemKind::Check => match exit_code {
-            Some(0) => CheckOutcome::Pass,
-            _ => CheckOutcome::Fail,
-        },
-        CheckItemKind::FixerProbe => match exit_code {
-            Some(0) => CheckOutcome::Pass,
-            Some(1) => CheckOutcome::RepairNeeded,
-            _ => CheckOutcome::Fail,
-        },
+        EvaluationItemKind::Check => CheckItemKind::Check,
+        EvaluationItemKind::FixerProbe => CheckItemKind::FixerProbe,
+    }
+}
+
+fn map_outcome(outcome: EvaluationOutcome) -> CheckOutcome {
+    match outcome {
+        EvaluationOutcome::Pass => CheckOutcome::Pass,
+        EvaluationOutcome::Fail => CheckOutcome::Fail,
+        EvaluationOutcome::Timeout => CheckOutcome::Timeout,
+        EvaluationOutcome::RepairNeeded => CheckOutcome::RepairNeeded,
     }
 }
