@@ -6,23 +6,11 @@ This repository builds `repocert`, a repository contract, certification, and enf
 
 ## Source Of Truth
 
-Use these sources for different purposes:
+1. Code and README
+   Source of truth for what repocert is and does.
 
-1. `docs/spec.md`
-   Initial design document and canonical statement of product intent, semantics, and major architectural decisions.
-
-2. Code
-   Source of truth for what is actually implemented today.
-
-3. GitHub issues
+2. GitHub issues
    Source of truth for planned work, sequencing, and decomposition.
-
-Do not assume these always match perfectly during active development.
-
-If they diverge:
-- do not silently pick whichever is most convenient
-- reconcile the mismatch in a way that keeps the project coherent
-- do not treat the spec as a document that must be continuously updated for every implementation detail
 
 ## Design Principles
 
