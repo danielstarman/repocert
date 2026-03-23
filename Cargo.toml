@@ -2,6 +2,9 @@
 name = "repocert"
 version = "0.1.0"
 edition = "2024"
+description = "Certification and enforcement for git repositories"
+license = "MIT"
+repository = "https://github.com/danielstarman/repocert"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
