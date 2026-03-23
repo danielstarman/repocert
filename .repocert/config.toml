@@ -18,3 +18,9 @@ certify = true
 [[protected_refs]]
 pattern = "refs/heads/main"
 profile = "default"
+
+[hooks]
+mode = "generated"
+
+[hooks.generated]
+hooks = ["pre-push", "update"]
