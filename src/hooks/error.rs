@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use thiserror::Error;
 
 use crate::config::{LoadFailure, LoadPaths};
-use crate::git::{GitCommonDirError, GitHooksPathError};
+use crate::git::{GitDirError, GitHooksPathError};
 
 #[derive(Debug, Error)]
 pub enum InstallHooksError {
@@ -18,10 +18,10 @@ pub enum InstallHooksError {
         error: GitHooksPathError,
     },
     #[error("{error}")]
-    GitCommonDir {
+    GitDir {
         paths: LoadPaths,
         #[source]
-        error: GitCommonDirError,
+        error: GitDirError,
     },
     #[error("repo-owned hooks directory {path:?} does not exist or is not a directory")]
     MissingRepoOwnedHookDir { paths: LoadPaths, path: PathBuf },
@@ -56,7 +56,7 @@ impl InstallHooksError {
             Self::Load(error) => error.paths.as_ref(),
             Self::MissingHooksConfig { paths }
             | Self::GitHooksPath { paths, .. }
-            | Self::GitCommonDir { paths, .. }
+            | Self::GitDir { paths, .. }
             | Self::MissingRepoOwnedHookDir { paths, .. }
             | Self::UnsupportedGeneratedHook { paths, .. }
             | Self::GeneratedHookWrite { paths, .. }

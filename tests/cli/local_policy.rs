@@ -145,6 +145,8 @@ fn install_hooks_generated_allows_feature_branch_commit_in_linked_worktree() {
     assert!(install.status.success());
 
     let worktree = add_linked_worktree(&repo, "feature");
+    let worktree_install = run_install_hooks(&["--format", "json"], &worktree);
+    assert!(worktree_install.status.success());
     write_repo_file_path(&worktree, "README.md", "feature\n");
     let add = run_git_output(&worktree, &["add", "README.md"]);
     assert!(add.status.success());
@@ -174,6 +176,8 @@ fn install_hooks_generated_blocks_merge_commit_on_protected_branch() {
     assert!(install.status.success());
 
     let worktree = add_linked_worktree(&repo, "feature");
+    let worktree_install = run_install_hooks(&["--format", "json"], &worktree);
+    assert!(worktree_install.status.success());
     write_repo_file_path(&worktree, "README.md", "feature\n");
     let add = run_git_output(&worktree, &["add", "README.md"]);
     assert!(add.status.success());
