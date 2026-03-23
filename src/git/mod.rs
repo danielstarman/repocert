@@ -1,8 +1,10 @@
+mod checkout;
 mod commit;
 mod common_dir;
 mod hooks_path;
 mod worktree;
 
+pub(crate) use checkout::{GitCheckoutError, inspect_checkout};
 pub(crate) use commit::{GitCommitError, resolve_commit, resolve_head_commit};
 pub(crate) use common_dir::{GitCommonDirError, resolve_git_common_dir};
 pub(crate) use hooks_path::{GitHooksPathError, read_core_hooks_path, write_core_hooks_path};

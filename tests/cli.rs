@@ -13,6 +13,8 @@ mod cli_check;
 mod cli_fix;
 #[path = "cli/install_hooks.rs"]
 mod cli_install_hooks;
+#[path = "cli/local_policy.rs"]
+mod cli_local_policy;
 #[path = "cli/status.rs"]
 mod cli_status;
 #[path = "cli/validate.rs"]

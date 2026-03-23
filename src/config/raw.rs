@@ -15,6 +15,7 @@ pub(super) struct RawConfig {
     pub protected_paths: Vec<String>,
     #[serde(default)]
     pub protected_refs: Vec<RawProtectedRef>,
+    pub local_policy: Option<RawLocalPolicy>,
     pub hooks: Option<RawHooks>,
 }
 
@@ -52,6 +53,14 @@ pub(super) struct RawProfile {
 pub(super) struct RawProtectedRef {
     pub pattern: String,
     pub profile: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub(super) struct RawLocalPolicy {
+    #[serde(default)]
+    pub protected_branches: Vec<String>,
+    #[serde(default)]
+    pub require_clean_primary_checkout: bool,
 }
 
 #[derive(Debug, Deserialize)]

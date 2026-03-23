@@ -24,6 +24,7 @@ pub struct Contract {
     pub built_in_protected_dir: RepoPath,
     pub declared_protected_paths: BTreeSet<RepoPath>,
     pub protected_refs: Vec<ProtectedRef>,
+    pub local_policy: Option<LocalPolicy>,
     pub hooks: Option<HooksConfig>,
 }
 
@@ -57,6 +58,12 @@ pub struct Profile {
 pub struct ProtectedRef {
     pub pattern: String,
     pub profile: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LocalPolicy {
+    pub protected_branches: Vec<String>,
+    pub require_clean_primary_checkout: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -263,6 +263,76 @@ certify = true
 }
 
 #[test]
+fn load_contract_local_policy_requires_generated_commit_hooks() {
+    // Arrange
+    let repo = TempDir::new().unwrap();
+    write_repo_file(
+        &repo,
+        ".repocert/config.toml",
+        r#"
+schema_version = 1
+
+[local_policy]
+protected_branches = ["refs/heads/main"]
+require_clean_primary_checkout = true
+
+[hooks]
+mode = "generated"
+
+[hooks.generated]
+hooks = ["pre-push", "update"]
+"#,
+    );
+
+    // Act
+    let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
+
+    // Assert
+    match error.error {
+        LoadError::Validation(errors) => {
+            let message = errors.to_string();
+            assert!(message.contains("pre-commit"));
+            assert!(message.contains("pre-merge-commit"));
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
+fn load_contract_local_policy_with_generated_commit_hooks_returns_validated_contract() {
+    // Arrange
+    let repo = TempDir::new().unwrap();
+    write_repo_file(
+        &repo,
+        ".repocert/config.toml",
+        r#"
+schema_version = 1
+
+[local_policy]
+protected_branches = ["refs/heads/main"]
+require_clean_primary_checkout = true
+
+[hooks]
+mode = "generated"
+
+[hooks.generated]
+hooks = ["pre-commit", "pre-merge-commit", "pre-push", "update"]
+"#,
+    );
+
+    // Act
+    let loaded = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap();
+
+    // Assert
+    let local_policy = loaded.contract.local_policy.as_ref().unwrap();
+    assert_eq!(
+        local_policy.protected_branches,
+        vec!["refs/heads/main".to_string()]
+    );
+    assert!(local_policy.require_clean_primary_checkout);
+}
+
+#[test]
 fn load_contract_non_certifiable_protected_ref_returns_validation_error() {
     // Arrange
     let repo = TempDir::new().unwrap();

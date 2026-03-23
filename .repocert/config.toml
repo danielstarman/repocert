@@ -19,8 +19,12 @@ certify = true
 pattern = "refs/heads/main"
 profile = "default"
 
+[local_policy]
+protected_branches = ["refs/heads/main"]
+require_clean_primary_checkout = true
+
 [hooks]
 mode = "generated"
 
 [hooks.generated]
-hooks = ["pre-push", "update"]
+hooks = ["pre-commit", "pre-merge-commit", "pre-push", "update"]

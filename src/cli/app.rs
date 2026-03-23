@@ -15,9 +15,33 @@ pub(super) enum Commands {
     Certify(CertifyArgs),
     Check(CheckArgs),
     Fix(FixArgs),
+    #[command(hide = true)]
+    Hook(HookArgs),
     InstallHooks(InstallHooksArgs),
     Status(StatusArgs),
     Validate(ValidateArgs),
+}
+
+#[derive(Debug, Args)]
+pub(super) struct HookArgs {
+    #[command(subcommand)]
+    pub command: HookCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub(super) enum HookCommand {
+    Run(HookRunArgs),
+}
+
+#[derive(Debug, Args)]
+pub(super) struct HookRunArgs {
+    #[arg(long = "repo-root")]
+    pub repo_root: Option<PathBuf>,
+    #[arg(long = "config-path")]
+    pub config_path: Option<PathBuf>,
+    pub hook: String,
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+    pub args: Vec<String>,
 }
 
 #[derive(Debug, Args)]
