@@ -4,7 +4,7 @@ use serde_json::{Map, Value, json};
 
 use repocert::config::LoadPaths;
 
-pub(super) fn command_success(
+pub(crate) fn command_success(
     command: &str,
     paths: &LoadPaths,
     ok: bool,
@@ -12,33 +12,38 @@ pub(super) fn command_success(
 ) -> Value {
     let mut object = base_object(command, Some(paths));
     object.insert("ok".to_string(), Value::Bool(ok));
+    object.insert("error".to_string(), Value::Null);
     object.extend(command_fields.into());
     Value::Object(object)
 }
 
-pub(super) fn command_error(
+pub(crate) fn command_error(
     command: &str,
     paths: Option<&LoadPaths>,
     category: &str,
     message: String,
-    command_fields: Option<Map<String, Value>>,
+    error_details: Option<Map<String, Value>>,
 ) -> Value {
     let mut object = base_object(command, paths);
     object.insert("ok".to_string(), Value::Bool(false));
-    object.insert(
-        "error".to_string(),
-        json!({
+
+    let error = match error_details {
+        Some(details) => json!({
+            "category": category,
+            "message": message,
+            "details": details,
+        }),
+        None => json!({
             "category": category,
             "message": message,
         }),
-    );
-    if let Some(command_fields) = command_fields {
-        object.extend(command_fields);
-    }
+    };
+
+    object.insert("error".to_string(), error);
     Value::Object(object)
 }
 
-pub(super) fn path_string(path: &Path) -> String {
+fn path_string(path: &Path) -> String {
     path.display().to_string()
 }
 

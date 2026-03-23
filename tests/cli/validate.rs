@@ -60,6 +60,7 @@ fn validate_repo_root_json_success_returns_resolved_paths() {
     let json: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["ok"], true);
     assert_eq!(json["command"], "validate");
+    assert_eq!(json["error"], Value::Null);
     assert_eq!(
         json["repo_root"],
         repo.path().canonicalize().unwrap().display().to_string()

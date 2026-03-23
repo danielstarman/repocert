@@ -72,7 +72,6 @@ fn render_json_success(report: &repocert::hooks::InstallHooksReport) {
     );
     command_fields.insert("changed".to_string(), json!(report.changed));
     command_fields.insert("repaired_items".to_string(), json!(report.repaired_items));
-    command_fields.insert("error".to_string(), serde_json::Value::Null);
 
     let output = command_success("install-hooks", &report.paths, true, command_fields);
     println!(

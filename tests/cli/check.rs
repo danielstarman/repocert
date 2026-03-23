@@ -57,6 +57,7 @@ checks = ["beta"]
     assert!(output.status.success());
     let json: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["ok"], true);
+    assert_eq!(json["error"], Value::Null);
     assert_eq!(json["selection_mode"], "profiles");
     assert_eq!(json["profiles"], serde_json::json!(["base"]));
     assert_eq!(json["checks"], serde_json::json!(["alpha"]));
@@ -99,6 +100,7 @@ default = true
     // Assert
     assert!(output.status.success());
     let json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["error"], Value::Null);
     assert_eq!(json["selection_mode"], "checks");
     assert_eq!(json["checks"], serde_json::json!(["beta"]));
     assert_eq!(json["results"].as_array().unwrap().len(), 1);

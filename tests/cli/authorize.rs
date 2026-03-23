@@ -53,6 +53,7 @@ fn authorize_no_matching_rule_returns_allowed() {
     // Assert
     assert!(output.status.success());
     let json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["error"], Value::Null);
     assert_eq!(json["allowed"], true);
     assert_eq!(json["matched_rules"], serde_json::json!([]));
 }
@@ -151,6 +152,7 @@ profile = "release"
     // Assert
     assert!(output.status.success());
     let json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["error"], Value::Null);
     assert_eq!(json["allowed"], true);
     assert_eq!(json["matched_rules"][0]["pattern"], "refs/heads/*");
     assert_eq!(json["profile_results"][0]["state"], "certified");

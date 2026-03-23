@@ -10,7 +10,7 @@ use repocert::certify::{
 use repocert::config::LoadError;
 
 use super::app::{CertifyArgs, OutputFormat};
-use super::json::{command_error, command_success};
+use super::json::{command_error, command_success, execution_result, profile_outcome_result};
 
 pub(super) fn run(args: CertifyArgs) -> ExitCode {
     let options = CertifyOptions {
@@ -108,24 +108,34 @@ fn render_json_success(report: &CertifyReport) {
                 .profile_results
                 .iter()
                 .map(|profile| {
-                    json!({
-                        "profile": profile.profile,
-                        "checks": profile.checks,
-                        "outcome": outcome_label(&profile.outcome),
-                        "record_written": profile.record_written,
-                        "item_results": profile
-                            .item_results
-                            .iter()
-                            .map(|result| json!({
-                                "name": result.name,
-                                "kind": item_kind_label(&result.kind),
-                                "outcome": item_outcome_label(&result.outcome),
-                                "exit_code": result.exit_code,
-                                "duration_ms": result.duration_ms,
-                                "message": result.message,
-                            }))
-                            .collect::<Vec<_>>(),
-                    })
+                    let mut extra_fields = Map::new();
+                    extra_fields.insert("checks".to_string(), json!(profile.checks));
+                    extra_fields
+                        .insert("record_written".to_string(), json!(profile.record_written));
+                    extra_fields.insert(
+                        "item_results".to_string(),
+                        Value::Array(
+                            profile
+                                .item_results
+                                .iter()
+                                .map(|result| {
+                                    execution_result(
+                                        &result.name,
+                                        item_kind_label(&result.kind),
+                                        item_outcome_label(&result.outcome),
+                                        result.exit_code,
+                                        result.duration_ms,
+                                        result.message.as_deref(),
+                                    )
+                                })
+                                .collect(),
+                        ),
+                    );
+                    profile_outcome_result(
+                        &profile.profile,
+                        outcome_label(&profile.outcome),
+                        extra_fields,
+                    )
                 })
                 .collect(),
         ),
@@ -140,8 +150,6 @@ fn render_json_success(report: &CertifyReport) {
             "repair_needed": report.summary.repair_needed,
         }),
     );
-    command_fields.insert("error".to_string(), Value::Null);
-
     let output = command_success("certify", &report.paths, report.ok(), command_fields);
     println!(
         "{}",
@@ -157,8 +165,8 @@ fn render_human_error(error: &CertifyError) {
 fn render_json_error(error: &CertifyError) {
     let command_fields = match error {
         CertifyError::DirtyWorktree { dirty_paths, .. } => Some({
-            let mut fields = Map::new();
-            fields.insert(
+            let mut details = Map::new();
+            details.insert(
                 "dirty_paths".to_string(),
                 Value::Array(
                     dirty_paths
@@ -167,7 +175,7 @@ fn render_json_error(error: &CertifyError) {
                         .collect(),
                 ),
             );
-            fields
+            details
         }),
         _ => None,
     };

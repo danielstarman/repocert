@@ -6,7 +6,7 @@ use repocert::config::LoadError;
 use repocert::fix::{FixError, FixOptions, FixOutcome, FixReport, FixSelectionMode, run_fix};
 
 use super::app::{FixArgs, OutputFormat};
-use super::json::{command_error, command_success};
+use super::json::{command_error, command_success, execution_result};
 
 pub(super) fn run(args: FixArgs) -> ExitCode {
     let options = FixOptions {
@@ -95,13 +95,14 @@ fn render_json_success(report: &FixReport) {
                 .results
                 .iter()
                 .map(|result| {
-                    json!({
-                        "name": result.name,
-                        "outcome": outcome_label(&result.outcome),
-                        "exit_code": result.exit_code,
-                        "duration_ms": result.duration_ms,
-                        "message": result.message,
-                    })
+                    execution_result(
+                        &result.name,
+                        "fixer",
+                        outcome_label(&result.outcome),
+                        result.exit_code,
+                        result.duration_ms,
+                        result.message.as_deref(),
+                    )
                 })
                 .collect(),
         ),
@@ -115,8 +116,6 @@ fn render_json_success(report: &FixReport) {
             "timeout": report.summary.timeout,
         }),
     );
-    command_fields.insert("error".to_string(), Value::Null);
-
     let output = command_success("fix", &report.paths, report.ok(), command_fields);
     println!(
         "{}",

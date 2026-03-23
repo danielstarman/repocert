@@ -10,7 +10,7 @@ use repocert::status::{
 };
 
 use super::app::{OutputFormat, StatusArgs};
-use super::json::{command_error, command_success};
+use super::json::{command_error, command_success, profile_state_result, protected_ref_result};
 
 pub(super) fn run(args: StatusArgs) -> ExitCode {
     let options = StatusOptions {
@@ -146,8 +146,6 @@ fn render_json_success(report: &StatusReport) {
             "uncertified": report.summary.uncertified,
         }),
     );
-    command_fields.insert("error".to_string(), Value::Null);
-
     let output = command_success("status", &report.paths, report.ok(), command_fields);
     println!(
         "{}",
@@ -189,23 +187,24 @@ fn error_category(error: &StatusError) -> &'static str {
 }
 
 fn profile_result_json(result: &StatusProfileResult) -> Value {
-    json!({
-        "profile": result.profile,
-        "state": profile_state_label(&result.state),
-        "other_certified_commits": result.other_certified_commits,
-        "recorded_fingerprint": result
-            .recorded_fingerprint
-            .as_ref()
-            .map(fingerprint_string),
-    })
+    let mut extra_fields = Map::new();
+    extra_fields.insert(
+        "other_certified_commits".to_string(),
+        json!(result.other_certified_commits),
+    );
+    extra_fields.insert(
+        "recorded_fingerprint".to_string(),
+        json!(result.recorded_fingerprint.as_ref().map(fingerprint_string)),
+    );
+    profile_state_result(
+        &result.profile,
+        profile_state_label(&result.state),
+        extra_fields,
+    )
 }
 
 fn protected_ref_json(result: &ProtectedRefStatus) -> Value {
-    json!({
-        "pattern": result.pattern,
-        "profile": result.profile,
-        "certified": result.certified,
-    })
+    protected_ref_result(&result.pattern, &result.profile, result.certified)
 }
 
 fn fingerprint_string(fingerprint: &ContractFingerprint) -> String {

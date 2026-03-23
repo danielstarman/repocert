@@ -44,8 +44,10 @@ argv = ["sh", "-c", "printf 'hello' > note.txt"]
     assert!(output.status.success());
     let json: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["ok"], true);
+    assert_eq!(json["error"], Value::Null);
     assert_eq!(json["selection_mode"], "fixers");
     assert_eq!(json["fixers"], serde_json::json!(["write_note"]));
+    assert_eq!(json["results"][0]["kind"], "fixer");
     assert_eq!(json["results"][0]["outcome"], "pass");
     assert_eq!(
         fs::read_to_string(repo.path().join("note.txt")).unwrap(),
@@ -228,6 +230,7 @@ argv = ["sh", "-c", "printf 'ok' > note.txt"]
     assert!(output.status.success());
     let json: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["ok"], true);
+    assert_eq!(json["error"], Value::Null);
     assert_eq!(json["results"][0]["outcome"], "pass");
 }
 
@@ -251,11 +254,13 @@ fn fix_current_repo_default_profile_runs_fmt_fixer() {
     assert!(output.status.success());
     let json: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["ok"], true);
+    assert_eq!(json["error"], Value::Null);
     assert_eq!(json["selection_mode"], "profile");
     assert_eq!(json["profile"], "default");
     assert_eq!(json["fixers"], serde_json::json!(["fmt"]));
     assert_eq!(json["results"].as_array().unwrap().len(), 1);
     assert_eq!(json["results"][0]["name"], "fmt");
+    assert_eq!(json["results"][0]["kind"], "fixer");
     assert_eq!(json["results"][0]["outcome"], "pass");
 }
 

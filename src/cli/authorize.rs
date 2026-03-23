@@ -9,7 +9,7 @@ use repocert::enforcement::{
 };
 
 use super::app::{AuthorizeArgs, OutputFormat};
-use super::json::{command_error, command_success};
+use super::json::{command_error, command_success, matched_rule_result, profile_state_result};
 
 pub(super) fn run(args: AuthorizeArgs) -> ExitCode {
     let options = AuthorizeOptions {
@@ -117,8 +117,6 @@ fn render_json_success(report: &AuthorizeReport) {
         ),
     );
     command_fields.insert("allowed".to_string(), Value::Bool(report.allowed));
-    command_fields.insert("error".to_string(), Value::Null);
-
     let output = command_success("authorize", &report.paths, report.ok(), command_fields);
     println!(
         "{}",
@@ -161,17 +159,11 @@ fn error_category(error: &AuthorizeError) -> &'static str {
 }
 
 fn matched_rule_json(rule: &MatchedRule) -> Value {
-    json!({
-        "pattern": rule.pattern,
-        "profile": rule.profile,
-    })
+    matched_rule_result(&rule.pattern, &rule.profile)
 }
 
 fn profile_result_json(result: &AuthorizeProfileResult) -> Value {
-    json!({
-        "profile": result.profile,
-        "state": state_label(&result.state),
-    })
+    profile_state_result(&result.profile, state_label(&result.state), Map::new())
 }
 
 fn state_label(state: &AuthorizeProfileState) -> &'static str {
