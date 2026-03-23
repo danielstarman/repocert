@@ -60,6 +60,7 @@ If they diverge:
 - When the same semantic concept appears in multiple places, prefer promoting it into a named model over repeating ad hoc field pairs.
 - Keep shared mechanism separate from command-specific semantics; reusable execution or integration layers should not live under command-owned modules unless they are truly command-specific.
 - When extracting shared behavior, prefer the narrowest honest seam over generic frameworks or “render anything / do anything” abstractions.
+- For local dogfooding, prefer invoking the built `repocert` binary directly over `cargo run` when practical. Use `cargo run` when its rebuild behavior is specifically helpful, but prefer direct CLI execution when validating real command behavior or hook-driven workflows.
 
 ## Issue Hygiene
 

@@ -11,7 +11,10 @@ use super::raw::RawConfig;
 
 use command::{validate_checks, validate_fixers};
 use common::issue;
-use policy::{validate_hooks, validate_protected_paths, validate_protected_refs};
+use policy::{
+    validate_hooks, validate_local_policy, validate_protected_paths, validate_protected_refs,
+    validate_required_generated_local_hooks,
+};
 use profile::{
     build_profiles, resolve_profiles, validate_certifiable_profiles, validate_default_profile,
     validate_profile_names, validate_profile_references,
@@ -47,7 +50,9 @@ pub(super) fn validate(raw: RawConfig, repo_root: &Path) -> Result<Contract, Loa
     let declared_protected_paths =
         validate_protected_paths(&raw.protected_paths, repo_root, &mut issues);
     let protected_refs = validate_protected_refs(&raw, &mut issues);
+    let local_policy = validate_local_policy(raw.local_policy.as_ref(), &mut issues);
     let hooks = validate_hooks(raw.hooks.as_ref(), repo_root, &mut issues);
+    validate_required_generated_local_hooks(local_policy.as_ref(), raw.hooks.as_ref(), &mut issues);
 
     if !issues.is_empty() {
         return Err(LoadError::Validation(ValidationErrors::new(issues)));
@@ -68,6 +73,7 @@ pub(super) fn validate(raw: RawConfig, repo_root: &Path) -> Result<Contract, Loa
         built_in_protected_dir: RepoPath::new(".repocert".to_string()),
         declared_protected_paths,
         protected_refs,
+        local_policy,
         hooks,
     })
 }

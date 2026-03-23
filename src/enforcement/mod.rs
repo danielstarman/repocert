@@ -1,5 +1,4 @@
 mod error;
-mod matcher;
 mod service;
 mod types;
 

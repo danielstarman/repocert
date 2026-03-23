@@ -120,7 +120,8 @@ hooks = ["pre-push", "update"]
     assert!(hooks_path.join("pre-push").exists());
     assert!(hooks_path.join("update").exists());
     let pre_push = fs::read_to_string(hooks_path.join("pre-push")).unwrap();
-    assert!(pre_push.contains("authorize"));
+    assert!(pre_push.contains("hook run"));
+    assert!(pre_push.contains("pre-push"));
     assert!(pre_push.contains(repocert_bin()));
 }
 
@@ -156,7 +157,8 @@ hooks = ["update"]
     let repaired_json: Value = serde_json::from_slice(&repaired.stdout).unwrap();
     assert_eq!(repaired_json["changed"], true);
     let update = fs::read_to_string(hooks_path.join("update")).unwrap();
-    assert!(update.contains("authorize"));
+    assert!(update.contains("hook run"));
+    assert!(update.contains("update"));
 }
 
 #[test]

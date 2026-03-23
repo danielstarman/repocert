@@ -2,8 +2,9 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use crate::config::error::{ValidationErrorKind, ValidationIssue};
-use crate::config::model::{HookMode, HooksConfig, ProtectedRef, RepoPath};
-use crate::config::raw::{RawConfig, RawHooks};
+use crate::config::model::{HookMode, HooksConfig, LocalPolicy, ProtectedRef, RepoPath};
+use crate::config::raw::{RawConfig, RawHooks, RawLocalPolicy};
+use crate::contract::validate_pattern;
 
 use super::common::{issue, normalize_repo_path};
 
@@ -54,6 +55,12 @@ pub(super) fn validate_protected_refs(
                 subject.clone(),
                 "protected ref pattern must not be empty".to_string(),
             ));
+        } else if let Err(message) = validate_pattern(&rule.pattern) {
+            issues.push(issue(
+                ValidationErrorKind::InvalidProtectedRef,
+                subject.clone(),
+                format!("invalid protected ref pattern: {message}"),
+            ));
         }
 
         match raw.profiles.get(&rule.profile) {
@@ -83,6 +90,93 @@ pub(super) fn validate_protected_refs(
     }
 
     validated
+}
+
+pub(super) fn validate_local_policy(
+    raw: Option<&RawLocalPolicy>,
+    issues: &mut Vec<ValidationIssue>,
+) -> Option<LocalPolicy> {
+    let raw = raw?;
+
+    if raw.protected_branches.is_empty() {
+        issues.push(issue(
+            ValidationErrorKind::InvalidLocalPolicy,
+            "local_policy.protected_branches".to_string(),
+            "local protected policy requires at least one protected branch pattern".to_string(),
+        ));
+    }
+
+    for pattern in &raw.protected_branches {
+        if pattern.trim().is_empty() {
+            issues.push(issue(
+                ValidationErrorKind::InvalidLocalPolicy,
+                "local_policy.protected_branches".to_string(),
+                "protected branch patterns must not be empty".to_string(),
+            ));
+            continue;
+        }
+        if !pattern.starts_with("refs/heads/") {
+            issues.push(issue(
+                ValidationErrorKind::InvalidLocalPolicy,
+                "local_policy.protected_branches".to_string(),
+                format!("local protected branch pattern {pattern:?} must target refs/heads/*"),
+            ));
+            continue;
+        }
+        if let Err(message) = validate_pattern(pattern) {
+            issues.push(issue(
+                ValidationErrorKind::InvalidLocalPolicy,
+                "local_policy.protected_branches".to_string(),
+                format!("invalid protected branch pattern {pattern:?}: {message}"),
+            ));
+        }
+    }
+
+    Some(LocalPolicy {
+        protected_branches: raw.protected_branches.clone(),
+        require_clean_primary_checkout: raw.require_clean_primary_checkout,
+    })
+}
+
+pub(super) fn validate_required_generated_local_hooks(
+    local_policy: Option<&LocalPolicy>,
+    hooks: Option<&RawHooks>,
+    issues: &mut Vec<ValidationIssue>,
+) {
+    let Some(local_policy) = local_policy else {
+        return;
+    };
+
+    let Some(hooks) = hooks else {
+        issues.push(issue(
+            ValidationErrorKind::InvalidLocalPolicy,
+            "local_policy".to_string(),
+            "local protected policy requires hooks configuration so it can be enforced".to_string(),
+        ));
+        return;
+    };
+
+    if hooks.mode != "generated" {
+        return;
+    }
+
+    let Some(generated) = hooks.generated.as_ref() else {
+        return;
+    };
+
+    for hook in ["pre-commit", "pre-merge-commit"] {
+        if !generated.hooks.iter().any(|configured| configured == hook) {
+            issues.push(issue(
+                ValidationErrorKind::InvalidLocalPolicy,
+                "hooks.generated.hooks".to_string(),
+                format!("generated hook mode with local protected policy must include {hook:?}"),
+            ));
+        }
+    }
+
+    if local_policy.protected_branches.is_empty() {
+        return;
+    }
 }
 
 pub(super) fn validate_hooks(

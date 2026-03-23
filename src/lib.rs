@@ -8,4 +8,5 @@ mod exec;
 pub mod fix;
 mod git;
 pub mod hooks;
+pub mod local_policy;
 pub mod status;

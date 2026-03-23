@@ -115,6 +115,7 @@ fn minimal_contract<const N: usize>(paths: [&str; N]) -> Contract {
         built_in_protected_dir: RepoPath::new(".repocert".to_string()),
         declared_protected_paths,
         protected_refs: Vec::new(),
+        local_policy: None,
         hooks: None,
     }
 }

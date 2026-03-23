@@ -3,7 +3,8 @@ use std::path::{Path, PathBuf};
 
 use crate::hooks::InstallHooksError;
 
-const SUPPORTED_GENERATED_HOOKS: &[&str] = &["pre-push", "update"];
+const SUPPORTED_GENERATED_HOOKS: &[&str] =
+    &["pre-commit", "pre-merge-commit", "pre-push", "update"];
 
 pub(super) fn validate_supported_hooks(
     paths: &crate::config::LoadPaths,
@@ -100,12 +101,18 @@ fn hook_script(hook: &str, executable_path: &Path, repo_root: &Path) -> String {
     let exe = shell_quote(executable_path);
     let repo = shell_quote(repo_root);
     match hook {
+        "pre-commit" => {
+            format!("#!/bin/sh\nset -eu\nexec {exe} hook run --repo-root {repo} pre-commit\n")
+        }
+        "pre-merge-commit" => {
+            format!("#!/bin/sh\nset -eu\nexec {exe} hook run --repo-root {repo} pre-merge-commit\n")
+        }
         "update" => format!(
-            "#!/bin/sh\nset -eu\nexec {exe} authorize \"$2\" \"$3\" \"$1\" --repo-root {repo}\n"
+            "#!/bin/sh\nset -eu\nexec {exe} hook run --repo-root {repo} update \"$1\" \"$2\" \"$3\"\n"
         ),
-        "pre-push" => format!(
-            "#!/bin/sh\nset -eu\nremote_name=\"$1\"\nremote_location=\"$2\"\nwhile IFS=' ' read -r local_ref local_oid remote_ref remote_oid; do\n    [ -z \"$local_ref\" ] && continue\n    {exe} authorize \"$remote_oid\" \"$local_oid\" \"$remote_ref\" --repo-root {repo} || exit $?\ndone\n"
-        ),
+        "pre-push" => {
+            format!("#!/bin/sh\nset -eu\nexec {exe} hook run --repo-root {repo} pre-push\n")
+        }
         other => unreachable!("unsupported generated hook {other}"),
     }
 }

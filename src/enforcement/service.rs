@@ -5,10 +5,10 @@ use crate::certification::{
     inspect_profile_certification,
 };
 use crate::config::load_contract;
+use crate::contract::matches_pattern;
 use crate::git::resolve_commit;
 
 use super::error::AuthorizeError;
-use super::matcher;
 use super::types::{
     AuthorizeOptions, AuthorizeProfileResult, AuthorizeProfileState, AuthorizeReport, MatchedRule,
 };
@@ -50,7 +50,7 @@ pub fn authorize_ref_update(options: AuthorizeOptions) -> Result<AuthorizeReport
         .contract
         .protected_refs
         .iter()
-        .filter_map(|rule| match matcher::matches(&rule.pattern, &reference) {
+        .filter_map(|rule| match matches_pattern(&rule.pattern, &reference) {
             Ok(true) => Some(Ok(MatchedRule {
                 pattern: rule.pattern.clone(),
                 profile: rule.profile.clone(),
