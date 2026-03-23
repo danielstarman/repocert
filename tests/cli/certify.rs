@@ -64,6 +64,7 @@ default = true
     assert!(output.status.success());
     let json: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["ok"], true);
+    assert_eq!(json["error"], Value::Null);
     assert_eq!(json["profiles"], serde_json::json!(["default"]));
     assert_eq!(json["profile_results"][0]["outcome"], "certified");
     assert_eq!(json["profile_results"][0]["record_written"], true);
@@ -158,7 +159,13 @@ default = true
     assert_eq!(output.status.code(), Some(1));
     let json: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["error"]["category"], "worktree");
-    assert!(json["dirty_paths"].as_array().unwrap().len() >= 1);
+    assert!(
+        json["error"]["details"]["dirty_paths"]
+            .as_array()
+            .unwrap()
+            .len()
+            >= 1
+    );
     assert!(!repo.path().join("marker.out").exists());
 }
 

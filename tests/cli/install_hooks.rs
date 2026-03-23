@@ -68,6 +68,8 @@ path = ".repocert/hooks"
     assert!(second.status.success());
     let first_json: Value = serde_json::from_slice(&first.stdout).unwrap();
     let second_json: Value = serde_json::from_slice(&second.stdout).unwrap();
+    assert_eq!(first_json["error"], Value::Null);
+    assert_eq!(second_json["error"], Value::Null);
     assert_eq!(first_json["mode"], "repo-owned");
     assert_eq!(second_json["changed"], false);
     assert_eq!(
@@ -109,6 +111,8 @@ hooks = ["pre-push", "update"]
     assert!(second.status.success());
     let first_json: Value = serde_json::from_slice(&first.stdout).unwrap();
     let second_json: Value = serde_json::from_slice(&second.stdout).unwrap();
+    assert_eq!(first_json["error"], Value::Null);
+    assert_eq!(second_json["error"], Value::Null);
     assert_eq!(first_json["mode"], "generated");
     assert_eq!(second_json["changed"], false);
 

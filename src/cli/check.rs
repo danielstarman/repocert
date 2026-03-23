@@ -9,7 +9,7 @@ use repocert::check::{
 use repocert::config::LoadError;
 
 use super::app::{CheckArgs, OutputFormat};
-use super::json::{command_error, command_success};
+use super::json::{command_error, command_success, execution_result};
 
 pub(super) fn run(args: CheckArgs) -> ExitCode {
     let options = CheckOptions {
@@ -103,14 +103,14 @@ fn render_json_success(report: &CheckReport) {
                 .results
                 .iter()
                 .map(|result| {
-                    json!({
-                        "name": result.name,
-                        "kind": item_kind_label(&result.kind),
-                        "outcome": outcome_label(&result.outcome),
-                        "exit_code": result.exit_code,
-                        "duration_ms": result.duration_ms,
-                        "message": result.message,
-                    })
+                    execution_result(
+                        &result.name,
+                        item_kind_label(&result.kind),
+                        outcome_label(&result.outcome),
+                        result.exit_code,
+                        result.duration_ms,
+                        result.message.as_deref(),
+                    )
                 })
                 .collect(),
         ),
