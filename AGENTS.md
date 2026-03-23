@@ -62,6 +62,13 @@ If they diverge:
 - When extracting shared behavior, prefer the narrowest honest seam over generic frameworks or “render anything / do anything” abstractions.
 - For local dogfooding, prefer invoking the built `repocert` binary directly over `cargo run` when practical. Use `cargo run` when its rebuild behavior is specifically helpful, but prefer direct CLI execution when validating real command behavior or hook-driven workflows.
 
+## Protected Checkout Workflow
+
+- This repo now treats the primary checkout on `main` as protected local workflow space.
+- If local policy blocks commits in the primary checkout, create a dedicated worktree/branch for implementation work.
+- Do normal development in that worktree, commit there, and run `repocert certify` on the exact worktree `HEAD`.
+- Bring the certified commit back to `main` via merge or fast-forward instead of developing directly on protected `main`.
+
 ## Issue Hygiene
 
 - If a PR closes an issue via GitHub automation, rely on that closure.
