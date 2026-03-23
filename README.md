@@ -55,6 +55,10 @@ repocert install-hooks              # wire enforcement into git hooks
 
 A push to `main` is blocked unless the target commit is certified.
 
+In worktree-based repos, run `repocert install-hooks` once per checkout/worktree.
+As of `0.1.1`, generated hook installation is checkout-local so one worktree
+cannot hijack another worktree's active hooks.
+
 ## Commands
 
 | Command | Purpose |
