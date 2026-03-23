@@ -108,7 +108,7 @@ fn error_category(error: &InstallHooksError) -> &'static str {
         },
         InstallHooksError::MissingHooksConfig { .. } => "hooks",
         InstallHooksError::GitHooksPath { .. } => "git",
-        InstallHooksError::GitCommonDir { .. } => "git",
+        InstallHooksError::GitDir { .. } => "git",
         InstallHooksError::MissingRepoOwnedHookDir { .. } => "hooks",
         InstallHooksError::UnsupportedGeneratedHook { .. } => "hooks",
         InstallHooksError::CurrentExecutable { .. } => "executable",

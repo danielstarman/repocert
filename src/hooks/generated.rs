@@ -22,8 +22,8 @@ pub(super) fn validate_supported_hooks(
     Ok(())
 }
 
-pub(super) fn generated_hooks_dir(common_dir: &Path) -> PathBuf {
-    common_dir.join("repocert").join("hooks").join("generated")
+pub(super) fn generated_hooks_dir(git_dir: &Path) -> PathBuf {
+    git_dir.join("repocert").join("hooks").join("generated")
 }
 
 pub(super) fn sync_generated_hooks(

@@ -5,7 +5,7 @@ use std::process::Command;
 use serde_json::Value;
 use tempfile::TempDir;
 
-use crate::{init_git_repo, write_repo_file};
+use crate::{commit_all, init_git_repo, write_repo_file};
 
 fn repocert_bin() -> &'static str {
     env!("CARGO_BIN_EXE_repocert")
@@ -20,10 +20,10 @@ fn run_install_hooks(args: &[&str], cwd: &Path) -> std::process::Output {
     command.output().unwrap()
 }
 
-fn read_hooks_path(repo: &TempDir) -> Option<String> {
+fn read_hooks_path(cwd: &Path) -> Option<String> {
     let output = Command::new("git")
-        .args(["config", "--local", "--get", "core.hooksPath"])
-        .current_dir(repo.path())
+        .args(["config", "--get", "core.hooksPath"])
+        .current_dir(cwd)
         .output()
         .unwrap();
     if output.status.success() {
@@ -31,6 +31,64 @@ fn read_hooks_path(repo: &TempDir) -> Option<String> {
     } else {
         None
     }
+}
+
+fn read_local_hooks_path(cwd: &Path) -> Option<String> {
+    let output = Command::new("git")
+        .args(["config", "--local", "--get", "core.hooksPath"])
+        .current_dir(cwd)
+        .output()
+        .unwrap();
+    if output.status.success() {
+        Some(String::from_utf8(output.stdout).unwrap().trim().to_string())
+    } else {
+        None
+    }
+}
+
+fn read_worktree_hooks_path(cwd: &Path) -> Option<String> {
+    let output = Command::new("git")
+        .args(["config", "--worktree", "--get", "core.hooksPath"])
+        .current_dir(cwd)
+        .output()
+        .unwrap();
+    if output.status.success() {
+        Some(String::from_utf8(output.stdout).unwrap().trim().to_string())
+    } else {
+        None
+    }
+}
+
+fn run_git_output(cwd: &Path, args: &[&str]) -> std::process::Output {
+    Command::new("git")
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .unwrap()
+}
+
+fn add_linked_worktree(repo: &TempDir, branch: &str) -> std::path::PathBuf {
+    let parent = TempDir::new().unwrap();
+    let worktree = parent.path().join("linked");
+    let output = run_git_output(
+        repo.path(),
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            branch,
+            worktree.to_str().unwrap(),
+            "HEAD",
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    std::mem::forget(parent);
+    worktree
 }
 
 #[test]
@@ -73,14 +131,14 @@ path = ".repocert/hooks"
     assert_eq!(first_json["mode"], "repo-owned");
     assert_eq!(second_json["changed"], false);
     assert_eq!(
-        read_hooks_path(&repo).unwrap(),
-        repo.path()
-            .join(".repocert/hooks")
-            .canonicalize()
-            .unwrap()
-            .display()
-            .to_string()
+        read_hooks_path(repo.path()).as_deref(),
+        Some(".repocert/hooks")
     );
+    assert_eq!(
+        read_worktree_hooks_path(repo.path()).as_deref(),
+        Some(".repocert/hooks")
+    );
+    assert_eq!(read_local_hooks_path(repo.path()), None);
 }
 
 #[test]
@@ -123,6 +181,11 @@ hooks = ["pre-push", "update"]
     assert!(pre_push.contains("hook run"));
     assert!(pre_push.contains("pre-push"));
     assert!(pre_push.contains(repocert_bin()));
+    assert_eq!(read_local_hooks_path(repo.path()), None);
+    assert_eq!(
+        read_hooks_path(repo.path()),
+        first_json["hooks_path"].as_str().map(str::to_string)
+    );
 }
 
 #[test]
@@ -215,4 +278,55 @@ path = ".repocert/hooks"
     assert_eq!(output.status.code(), Some(1));
     let json: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["error"]["category"], "hooks");
+}
+
+#[test]
+fn install_hooks_generated_in_linked_worktree_does_not_hijack_primary_checkout() {
+    let repo = TempDir::new().unwrap();
+    init_git_repo(&repo);
+    write_repo_file(
+        &repo,
+        ".repocert/config.toml",
+        r#"
+schema_version = 1
+
+[hooks]
+mode = "generated"
+
+[hooks.generated]
+hooks = ["update"]
+"#,
+    );
+    write_repo_file(&repo, "README.md", "initial\n");
+    commit_all(&repo, "initial");
+
+    let primary_install = run_install_hooks(&["--format", "json"], repo.path());
+    assert!(primary_install.status.success());
+    let primary_json: Value = serde_json::from_slice(&primary_install.stdout).unwrap();
+    let primary_hooks_path = primary_json["hooks_path"].as_str().unwrap().to_string();
+    let primary_update = fs::read_to_string(Path::new(&primary_hooks_path).join("update")).unwrap();
+    assert!(primary_update.contains(repo.path().to_str().unwrap()));
+
+    let worktree = add_linked_worktree(&repo, "feature");
+    let worktree_install = run_install_hooks(&["--format", "json"], &worktree);
+    assert!(worktree_install.status.success());
+    let worktree_json: Value = serde_json::from_slice(&worktree_install.stdout).unwrap();
+    let worktree_hooks_path = worktree_json["hooks_path"].as_str().unwrap().to_string();
+    let worktree_update =
+        fs::read_to_string(Path::new(&worktree_hooks_path).join("update")).unwrap();
+
+    assert_ne!(primary_hooks_path, worktree_hooks_path);
+    assert_eq!(
+        read_hooks_path(repo.path()).as_deref(),
+        Some(primary_hooks_path.as_str())
+    );
+    assert_eq!(
+        read_hooks_path(&worktree).as_deref(),
+        Some(worktree_hooks_path.as_str())
+    );
+    assert!(worktree_update.contains(worktree.to_str().unwrap()));
+
+    let primary_update_after =
+        fs::read_to_string(Path::new(&primary_hooks_path).join("update")).unwrap();
+    assert_eq!(primary_update_after, primary_update);
 }
