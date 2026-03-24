@@ -4,8 +4,11 @@ mod plan;
 mod service;
 mod types;
 
+/// Errors returned by [`run_check`].
 pub use error::{CheckError, CheckSelectionError};
+/// Run checks and fixer probes selected from the loaded contract.
 pub use service::run_check;
+/// Types used to configure and inspect `check` execution.
 pub use types::{
     CheckItemKind, CheckItemResult, CheckOptions, CheckOutcome, CheckReport, CheckSelectionMode,
     CheckSummary,

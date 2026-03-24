@@ -7,14 +7,19 @@ use super::model::{LoadPaths, LoadedContract};
 use super::raw::RawConfig;
 use super::validate;
 
+/// Controls how `.repocert/config.toml` is located before loading.
 #[derive(Clone, Debug, Default)]
 pub struct LoadOptions {
+    /// Starting directory for upward config discovery.
     pub start_dir: Option<PathBuf>,
+    /// Explicit repository root to load from.
     pub repo_root: Option<PathBuf>,
+    /// Explicit config file path to load.
     pub config_path: Option<PathBuf>,
 }
 
 impl LoadOptions {
+    /// Discover a config by walking upward from `path`.
     pub fn discover_from(path: impl Into<PathBuf>) -> Self {
         Self {
             start_dir: Some(path.into()),
@@ -23,6 +28,7 @@ impl LoadOptions {
         }
     }
 
+    /// Load the default config from an explicit repository root.
     pub fn from_repo_root(path: impl Into<PathBuf>) -> Self {
         Self {
             start_dir: None,
@@ -31,6 +37,7 @@ impl LoadOptions {
         }
     }
 
+    /// Load a config from an explicit path.
     pub fn from_config_path(path: impl Into<PathBuf>) -> Self {
         Self {
             start_dir: None,
@@ -40,9 +47,12 @@ impl LoadOptions {
     }
 }
 
+/// Wraps a [`LoadError`] together with any resolved paths available at failure time.
 #[derive(Debug)]
 pub struct LoadFailure {
+    /// Resolved repository/config paths, when discovery reached that point.
     pub paths: Option<LoadPaths>,
+    /// The underlying discovery, parse, or validation error.
     pub error: LoadError,
 }
 
@@ -58,6 +68,7 @@ impl std::error::Error for LoadFailure {
     }
 }
 
+/// Discover, parse, and validate a repository contract from disk.
 pub fn load_contract(options: LoadOptions) -> Result<LoadedContract, LoadFailure> {
     let paths = discovery::resolve(options).map_err(|error| LoadFailure {
         paths: None,

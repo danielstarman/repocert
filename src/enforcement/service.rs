@@ -13,6 +13,7 @@ use super::types::{
     AuthorizeOptions, AuthorizeProfileResult, AuthorizeProfileState, AuthorizeReport, MatchedRule,
 };
 
+/// Authorize a proposed ref update against the current contract and certification store.
 pub fn authorize_ref_update(options: AuthorizeOptions) -> Result<AuthorizeReport, AuthorizeError> {
     let AuthorizeOptions {
         load_options,

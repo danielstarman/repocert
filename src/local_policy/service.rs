@@ -5,6 +5,7 @@ use crate::git::{capture_worktree_snapshot, inspect_checkout};
 use super::error::LocalPolicyError;
 use super::types::{LocalPolicyDecision, LocalPolicyOptions, LocalPolicyViolation};
 
+/// Check whether the current checkout satisfies the configured local policy.
 pub fn check_local_commit_policy(
     options: LocalPolicyOptions,
 ) -> Result<LocalPolicyDecision, LocalPolicyError> {
