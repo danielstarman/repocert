@@ -5,7 +5,7 @@ use crate::git::{
 };
 
 use super::error::InstallHooksError;
-use super::generated::{generated_hooks_dir, sync_generated_hooks, validate_supported_hooks};
+use super::generated::{generated_hooks_dir, generated_hooks_for_contract, sync_generated_hooks};
 use super::types::{HookInstallMode, InstallHooksOptions, InstallHooksReport};
 
 pub fn install_hooks(
@@ -27,23 +27,7 @@ pub fn install_hooks(
             })?;
 
     let (mode, hooks_path, desired_hooks_path, mut repaired_items) = match &hooks.mode {
-        HookMode::RepoOwned { path } => {
-            let hooks_path = loaded.paths.repo_root.join(path.as_str());
-            if !hooks_path.is_dir() {
-                return Err(InstallHooksError::MissingRepoOwnedHookDir {
-                    paths: loaded.paths.clone(),
-                    path: hooks_path,
-                });
-            }
-            (
-                HookInstallMode::RepoOwned,
-                hooks_path,
-                path.as_str().to_string(),
-                Vec::new(),
-            )
-        }
-        HookMode::Generated { hooks } => {
-            validate_supported_hooks(&loaded.paths, hooks)?;
+        HookMode::Generated => {
             let git_dir = resolve_git_dir(&loaded.paths.repo_root).map_err(|error| {
                 InstallHooksError::GitDir {
                     paths: loaded.paths.clone(),
@@ -51,8 +35,9 @@ pub fn install_hooks(
                 }
             })?;
             let hooks_path = generated_hooks_dir(&git_dir);
+            let hooks = generated_hooks_for_contract(&loaded.contract);
             let repaired =
-                sync_generated_hooks(&loaded.paths, &hooks_path, hooks, &executable_path)?;
+                sync_generated_hooks(&loaded.paths, &hooks_path, &hooks, &executable_path)?;
             let desired_hooks_path = hooks_path
                 .canonicalize()
                 .unwrap_or_else(|_| hooks_path.clone())

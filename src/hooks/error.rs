@@ -23,10 +23,6 @@ pub enum InstallHooksError {
         #[source]
         error: GitDirError,
     },
-    #[error("repo-owned hooks directory {path:?} does not exist or is not a directory")]
-    MissingRepoOwnedHookDir { paths: LoadPaths, path: PathBuf },
-    #[error("generated hook name {hook:?} is unsupported in v1")]
-    UnsupportedGeneratedHook { paths: LoadPaths, hook: String },
     #[error("failed to determine the current repocert executable path")]
     CurrentExecutable {
         paths: Option<LoadPaths>,
@@ -57,8 +53,6 @@ impl InstallHooksError {
             Self::MissingHooksConfig { paths }
             | Self::GitHooksPath { paths, .. }
             | Self::GitDir { paths, .. }
-            | Self::MissingRepoOwnedHookDir { paths, .. }
-            | Self::UnsupportedGeneratedHook { paths, .. }
             | Self::GeneratedHookWrite { paths, .. }
             | Self::GeneratedHookPrune { paths, .. } => Some(paths),
             Self::CurrentExecutable { paths, .. } => paths.as_ref(),

@@ -109,8 +109,6 @@ fn error_category(error: &InstallHooksError) -> &'static str {
         InstallHooksError::MissingHooksConfig { .. } => "hooks",
         InstallHooksError::GitHooksPath { .. } => "git",
         InstallHooksError::GitDir { .. } => "git",
-        InstallHooksError::MissingRepoOwnedHookDir { .. } => "hooks",
-        InstallHooksError::UnsupportedGeneratedHook { .. } => "hooks",
         InstallHooksError::CurrentExecutable { .. } => "executable",
         InstallHooksError::GeneratedHookWrite { .. } => "hooks",
         InstallHooksError::GeneratedHookPrune { .. } => "hooks",
@@ -119,7 +117,6 @@ fn error_category(error: &InstallHooksError) -> &'static str {
 
 fn mode_label(mode: &HookInstallMode) -> &'static str {
     match mode {
-        HookInstallMode::RepoOwned => "repo-owned",
         HookInstallMode::Generated => "generated",
     }
 }

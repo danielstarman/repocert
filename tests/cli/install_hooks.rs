@@ -46,19 +46,6 @@ fn read_local_hooks_path(cwd: &Path) -> Option<String> {
     }
 }
 
-fn read_worktree_hooks_path(cwd: &Path) -> Option<String> {
-    let output = Command::new("git")
-        .args(["config", "--worktree", "--get", "core.hooksPath"])
-        .current_dir(cwd)
-        .output()
-        .unwrap();
-    if output.status.success() {
-        Some(String::from_utf8(output.stdout).unwrap().trim().to_string())
-    } else {
-        None
-    }
-}
-
 fn run_git_output(cwd: &Path, args: &[&str]) -> std::process::Output {
     Command::new("git")
         .args(args)
@@ -91,54 +78,24 @@ fn add_linked_worktree(repo: &TempDir, branch: &str) -> std::path::PathBuf {
     worktree
 }
 
-#[test]
-fn install_hooks_repo_owned_sets_core_hooks_path_and_is_idempotent() {
-    // Arrange
-    let repo = TempDir::new().unwrap();
-    init_git_repo(&repo);
-    write_repo_file(
-        &repo,
-        ".repocert/config.toml",
-        r#"
+fn generated_protected_ref_config() -> &'static str {
+    r#"
 schema_version = 1
 
-[checks.missing]
-argv = ["definitely-not-a-real-command"]
+[checks.git-status]
+argv = ["git", "status", "--short"]
 
-[profiles.default]
-checks = ["missing"]
+[profiles.release]
+checks = ["git-status"]
+certify = true
+
+[[protected_refs]]
+pattern = "refs/heads/main"
+profile = "release"
 
 [hooks]
-mode = "repo-owned"
-
-[hooks.repo_owned]
-path = ".repocert/hooks"
-"#,
-    );
-    write_repo_file(&repo, ".repocert/hooks/pre-push", "#!/bin/sh\nexit 0\n");
-
-    // Act
-    let first = run_install_hooks(&["--format", "json"], repo.path());
-    let second = run_install_hooks(&["--format", "json"], repo.path());
-
-    // Assert
-    assert!(first.status.success());
-    assert!(second.status.success());
-    let first_json: Value = serde_json::from_slice(&first.stdout).unwrap();
-    let second_json: Value = serde_json::from_slice(&second.stdout).unwrap();
-    assert_eq!(first_json["error"], Value::Null);
-    assert_eq!(second_json["error"], Value::Null);
-    assert_eq!(first_json["mode"], "repo-owned");
-    assert_eq!(second_json["changed"], false);
-    assert_eq!(
-        read_hooks_path(repo.path()).as_deref(),
-        Some(".repocert/hooks")
-    );
-    assert_eq!(
-        read_worktree_hooks_path(repo.path()).as_deref(),
-        Some(".repocert/hooks")
-    );
-    assert_eq!(read_local_hooks_path(repo.path()), None);
+mode = "generated"
+"#
 }
 
 #[test]
@@ -149,15 +106,7 @@ fn install_hooks_generated_writes_wrappers_and_is_idempotent() {
     write_repo_file(
         &repo,
         ".repocert/config.toml",
-        r#"
-schema_version = 1
-
-[hooks]
-mode = "generated"
-
-[hooks.generated]
-hooks = ["pre-push", "update"]
-"#,
+        generated_protected_ref_config(),
     );
 
     // Act
@@ -196,15 +145,7 @@ fn install_hooks_generated_repairs_stale_wrapper_content() {
     write_repo_file(
         &repo,
         ".repocert/config.toml",
-        r#"
-schema_version = 1
-
-[hooks]
-mode = "generated"
-
-[hooks.generated]
-hooks = ["update"]
-"#,
+        generated_protected_ref_config(),
     );
     let first = run_install_hooks(&["--format", "json"], repo.path());
     assert!(first.status.success());
@@ -225,7 +166,7 @@ hooks = ["update"]
 }
 
 #[test]
-fn install_hooks_generated_unsupported_hook_name_errors() {
+fn install_hooks_generated_without_protected_refs_or_local_policy_errors() {
     // Arrange
     let repo = TempDir::new().unwrap();
     init_git_repo(&repo);
@@ -237,9 +178,6 @@ schema_version = 1
 
 [hooks]
 mode = "generated"
-
-[hooks.generated]
-hooks = ["pre-receive"]
 "#,
     );
 
@@ -249,12 +187,11 @@ hooks = ["pre-receive"]
     // Assert
     assert_eq!(output.status.code(), Some(1));
     let json: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(json["error"]["category"], "hooks");
+    assert_eq!(json["error"]["category"], "validation");
 }
 
 #[test]
-fn install_hooks_repo_owned_missing_directory_errors() {
-    // Arrange
+fn install_hooks_repo_owned_mode_returns_validation_error() {
     let repo = TempDir::new().unwrap();
     init_git_repo(&repo);
     write_repo_file(
@@ -265,19 +202,20 @@ schema_version = 1
 
 [hooks]
 mode = "repo-owned"
-
-[hooks.repo_owned]
-path = ".repocert/hooks"
 "#,
     );
 
-    // Act
     let output = run_install_hooks(&["--format", "json"], repo.path());
 
-    // Assert
     assert_eq!(output.status.code(), Some(1));
     let json: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(json["error"]["category"], "hooks");
+    assert_eq!(json["error"]["category"], "validation");
+    assert!(
+        json["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("unsupported hook mode")
+    );
 }
 
 #[test]
@@ -287,15 +225,7 @@ fn install_hooks_generated_in_linked_worktree_does_not_hijack_primary_checkout()
     write_repo_file(
         &repo,
         ".repocert/config.toml",
-        r#"
-schema_version = 1
-
-[hooks]
-mode = "generated"
-
-[hooks.generated]
-hooks = ["update"]
-"#,
+        generated_protected_ref_config(),
     );
     write_repo_file(&repo, "README.md", "initial\n");
     commit_all(&repo, "initial");
