@@ -14,6 +14,7 @@ use super::types::{
     CertifyProfileResult, CertifyReport, CertifySummary,
 };
 
+/// Certify the current `HEAD` commit for one or more certification-eligible profiles.
 pub fn run_certify(options: CertifyOptions) -> Result<CertifyReport, CertifyError> {
     let CertifyOptions {
         load_options,

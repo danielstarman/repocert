@@ -11,6 +11,7 @@ use super::types::{
     StatusSummary,
 };
 
+/// Inspect certification state for a commit and any matching protected refs.
 pub fn run_status(options: StatusOptions) -> Result<StatusReport, StatusError> {
     let StatusOptions {
         load_options,

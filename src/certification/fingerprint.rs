@@ -11,6 +11,10 @@ use super::{ContractFingerprint, FingerprintError};
 const CONFIG_REPO_PATH: &str = ".repocert/config.toml";
 const DOMAIN_SEPARATOR: &[u8] = b"repocert:contract-fingerprint:v1\0";
 
+/// Compute the deterministic fingerprint for a loaded contract.
+///
+/// The fingerprint includes the exact bytes of `.repocert/config.toml` plus any
+/// additional protected contract paths declared by the repository.
 pub fn compute_contract_fingerprint(
     loaded: &LoadedContract,
 ) -> Result<ContractFingerprint, FingerprintError> {

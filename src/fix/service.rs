@@ -7,6 +7,7 @@ use super::execute::{protected_roots, run_planned_fixer};
 use super::plan::{FixPlan, build_fix_plan};
 use super::types::{FixItemResult, FixOptions, FixOutcome, FixReport, FixSummary};
 
+/// Run mutating fixers for a selected profile or explicit fixer list.
 pub fn run_fix(options: FixOptions) -> Result<FixReport, FixError> {
     let FixOptions {
         load_options,

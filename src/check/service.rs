@@ -8,6 +8,7 @@ use super::execute::run_planned_item;
 use super::plan::{SelectionPlan, build_selection_plan};
 use super::types::{CheckItemResult, CheckOptions, CheckOutcome, CheckReport, CheckSummary};
 
+/// Run contract checks and fixer probes for the selected profiles or named checks.
 pub fn run_check(options: CheckOptions) -> Result<CheckReport, CheckError> {
     let CheckOptions {
         load_options,

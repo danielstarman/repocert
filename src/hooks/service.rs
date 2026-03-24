@@ -8,6 +8,7 @@ use super::error::InstallHooksError;
 use super::generated::{generated_hooks_dir, generated_hooks_for_contract, sync_generated_hooks};
 use super::types::{HookInstallMode, InstallHooksOptions, InstallHooksReport};
 
+/// Install generated git hooks for the target repository/worktree.
 pub fn install_hooks(
     options: InstallHooksOptions,
 ) -> Result<InstallHooksReport, InstallHooksError> {

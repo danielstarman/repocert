@@ -1,28 +1,36 @@
 use serde::de::{Error as DeError, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+/// Unique certification key for a `(commit, profile)` pair.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct CertificationKey {
+    /// Certified commit SHA.
     pub commit: String,
+    /// Certified profile name.
     pub profile: String,
 }
 
+/// Exact-byte SHA-256 fingerprint of the current repository contract.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ContractFingerprint([u8; 32]);
 
 impl ContractFingerprint {
+    /// Construct a fingerprint from raw SHA-256 bytes.
     pub fn from_bytes(bytes: [u8; 32]) -> Self {
         Self(bytes)
     }
 
+    /// Borrow the raw fingerprint bytes.
     pub fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }
 
+    /// Encode the fingerprint as lowercase hexadecimal.
     pub fn to_hex(&self) -> String {
         hex_encode(&self.0)
     }
 
+    /// Decode a lowercase hexadecimal fingerprint string.
     pub fn from_hex(value: &str) -> Result<Self, String> {
         let bytes = hex_decode(value)?;
         let bytes: [u8; 32] = bytes
@@ -67,9 +75,12 @@ impl<'de> Deserialize<'de> for ContractFingerprint {
     }
 }
 
+/// Stored certification state for one `(commit, profile)` pair.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct CertificationRecord {
+    /// Commit/profile key this record certifies.
     pub key: CertificationKey,
+    /// Contract fingerprint that was current when the certification was written.
     pub contract_fingerprint: ContractFingerprint,
 }
 

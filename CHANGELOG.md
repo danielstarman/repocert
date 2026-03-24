@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 - 2026-03-24
+
+- Added crate-level and public API rustdoc coverage so docs.rs exposes a usable library surface instead of an effectively undocumented crate.
+
 ## 0.2.0 - 2026-03-24
 
 - Changed `install-hooks` generated mode to derive managed hook wrappers from contract semantics (`protected_refs` and `local_policy`) instead of requiring `hooks.generated.hooks`.
