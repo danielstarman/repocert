@@ -45,10 +45,7 @@ pattern = "refs/heads/main"
 profile = "release"
 
 [hooks]
-mode = "repo-owned"
-
-[hooks.repo_owned]
-path = ".repocert/hooks"
+mode = "generated"
 "#,
     );
     std::fs::create_dir_all(repo.path().join("nested/work")).unwrap();
@@ -83,10 +80,10 @@ path = ".repocert/hooks"
             .iter()
             .any(|path| path.as_str() == "README.md")
     );
-    match &loaded.contract.hooks.as_ref().unwrap().mode {
-        HookMode::RepoOwned { path } => assert_eq!(path.as_str(), ".repocert/hooks"),
-        other => panic!("unexpected hook mode: {other:?}"),
-    }
+    assert_eq!(
+        loaded.contract.hooks.as_ref().unwrap().mode,
+        HookMode::Generated
+    );
 }
 
 #[test]
@@ -263,7 +260,7 @@ certify = true
 }
 
 #[test]
-fn load_contract_local_policy_requires_generated_commit_hooks() {
+fn load_contract_local_policy_requires_hooks_configuration() {
     // Arrange
     let repo = TempDir::new().unwrap();
     write_repo_file(
@@ -275,12 +272,6 @@ schema_version = 1
 [local_policy]
 protected_branches = ["refs/heads/main"]
 require_clean_primary_checkout = true
-
-[hooks]
-mode = "generated"
-
-[hooks.generated]
-hooks = ["pre-push", "update"]
 "#,
     );
 
@@ -290,16 +281,14 @@ hooks = ["pre-push", "update"]
     // Assert
     match error.error {
         LoadError::Validation(errors) => {
-            let message = errors.to_string();
-            assert!(message.contains("pre-commit"));
-            assert!(message.contains("pre-merge-commit"));
+            assert!(errors.to_string().contains("requires hooks configuration"));
         }
         other => panic!("unexpected error: {other:?}"),
     }
 }
 
 #[test]
-fn load_contract_local_policy_with_generated_commit_hooks_returns_validated_contract() {
+fn load_contract_local_policy_with_generated_hooks_returns_validated_contract() {
     // Arrange
     let repo = TempDir::new().unwrap();
     write_repo_file(
@@ -314,9 +303,6 @@ require_clean_primary_checkout = true
 
 [hooks]
 mode = "generated"
-
-[hooks.generated]
-hooks = ["pre-commit", "pre-merge-commit", "pre-push", "update"]
 "#,
     );
 
@@ -330,6 +316,85 @@ hooks = ["pre-commit", "pre-merge-commit", "pre-push", "update"]
         vec!["refs/heads/main".to_string()]
     );
     assert!(local_policy.require_clean_primary_checkout);
+}
+
+#[test]
+fn load_contract_generated_hook_mode_requires_contract_semantics() {
+    let repo = TempDir::new().unwrap();
+    write_repo_file(
+        &repo,
+        ".repocert/config.toml",
+        r#"
+schema_version = 1
+
+[hooks]
+mode = "generated"
+"#,
+    );
+
+    let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
+
+    match error.error {
+        LoadError::Validation(errors) => {
+            assert!(
+                errors
+                    .to_string()
+                    .contains("requires protected_refs and/or local_policy")
+            );
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
+fn load_contract_repo_owned_hook_mode_returns_unsupported_mode_error() {
+    let repo = TempDir::new().unwrap();
+    write_repo_file(
+        &repo,
+        ".repocert/config.toml",
+        r#"
+schema_version = 1
+
+[hooks]
+mode = "repo-owned"
+"#,
+    );
+
+    let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
+
+    match error.error {
+        LoadError::Validation(errors) => {
+            assert!(errors.to_string().contains("unsupported hook mode"));
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
+fn load_contract_unknown_repo_owned_hook_table_returns_parse_error() {
+    let repo = TempDir::new().unwrap();
+    write_repo_file(
+        &repo,
+        ".repocert/config.toml",
+        r#"
+schema_version = 1
+
+[hooks]
+mode = "generated"
+
+[hooks.repo_owned]
+path = ".repocert/hooks"
+"#,
+    );
+
+    let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
+
+    match error.error {
+        LoadError::Parse(error) => {
+            assert!(error.to_string().contains("repo_owned"));
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
 }
 
 #[test]
@@ -387,7 +452,6 @@ mode = "generated"
 path = ".repocert/hooks"
 
 [hooks.generated]
-hooks = ["pre-push"]
 "#,
     );
 
@@ -396,12 +460,8 @@ hooks = ["pre-push"]
 
     // Assert
     match error.error {
-        LoadError::Validation(errors) => {
-            assert!(
-                errors
-                    .to_string()
-                    .contains("repo-owned hook configuration is not allowed")
-            );
+        LoadError::Parse(error) => {
+            assert!(error.to_string().contains("repo_owned"));
         }
         other => panic!("unexpected error: {other:?}"),
     }

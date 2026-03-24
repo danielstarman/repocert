@@ -138,135 +138,56 @@ pub(super) fn validate_local_policy(
     })
 }
 
-pub(super) fn validate_required_generated_local_hooks(
-    local_policy: Option<&LocalPolicy>,
-    hooks: Option<&RawHooks>,
-    issues: &mut Vec<ValidationIssue>,
-) {
-    let Some(local_policy) = local_policy else {
-        return;
-    };
-
-    let Some(hooks) = hooks else {
-        issues.push(issue(
-            ValidationErrorKind::InvalidLocalPolicy,
-            "local_policy".to_string(),
-            "local protected policy requires hooks configuration so it can be enforced".to_string(),
-        ));
-        return;
-    };
-
-    if hooks.mode != "generated" {
-        return;
-    }
-
-    let Some(generated) = hooks.generated.as_ref() else {
-        return;
-    };
-
-    for hook in ["pre-commit", "pre-merge-commit"] {
-        if !generated.hooks.iter().any(|configured| configured == hook) {
-            issues.push(issue(
-                ValidationErrorKind::InvalidLocalPolicy,
-                "hooks.generated.hooks".to_string(),
-                format!("generated hook mode with local protected policy must include {hook:?}"),
-            ));
-        }
-    }
-
-    if local_policy.protected_branches.is_empty() {
-        return;
-    }
-}
-
 pub(super) fn validate_hooks(
     hooks: Option<&RawHooks>,
-    repo_root: &Path,
+    local_policy: Option<&LocalPolicy>,
+    protected_refs: &[ProtectedRef],
     issues: &mut Vec<ValidationIssue>,
 ) -> Option<HooksConfig> {
-    let hooks = hooks?;
+    let Some(hooks) = hooks else {
+        if local_policy.is_some() {
+            issues.push(issue(
+                ValidationErrorKind::InvalidLocalPolicy,
+                "local_policy".to_string(),
+                "local protected policy requires hooks configuration so it can be enforced"
+                    .to_string(),
+            ));
+        }
+        return None;
+    };
 
     match hooks.mode.as_str() {
-        "repo-owned" => {
-            if hooks.generated.is_some() {
-                issues.push(issue(
-                    ValidationErrorKind::InvalidHookMode,
-                    "hooks.generated".to_string(),
-                    "generated hook configuration is not allowed when hooks.mode = \"repo-owned\""
-                        .to_string(),
-                ));
-            }
-            let Some(repo_owned) = hooks.repo_owned.as_ref() else {
-                issues.push(issue(
-                    ValidationErrorKind::InvalidHookMode,
-                    "hooks.repo_owned".to_string(),
-                    "repo-owned hook mode requires a [hooks.repo_owned] table".to_string(),
-                ));
-                return None;
-            };
-            let path = match normalize_repo_path(&repo_owned.path, repo_root) {
-                Ok(path) => path,
-                Err(message) => {
-                    issues.push(issue(
-                        ValidationErrorKind::InvalidHookMode,
-                        "hooks.repo_owned.path".to_string(),
-                        message,
-                    ));
-                    return None;
-                }
-            };
-
-            Some(HooksConfig {
-                mode: HookMode::RepoOwned { path },
-            })
-        }
         "generated" => {
-            if hooks.repo_owned.is_some() {
+            if let Some(generated) = hooks.generated.as_ref() {
                 issues.push(issue(
                     ValidationErrorKind::InvalidHookMode,
-                    "hooks.repo_owned".to_string(),
-                    "repo-owned hook configuration is not allowed when hooks.mode = \"generated\""
+                    if generated.hooks.is_some() {
+                        "hooks.generated.hooks".to_string()
+                    } else {
+                        "hooks.generated".to_string()
+                    },
+                    "generated hook mode derives managed hooks from protected_refs and local_policy; [hooks.generated] is not allowed"
                         .to_string(),
                 ));
             }
-            let Some(generated) = hooks.generated.as_ref() else {
+
+            if local_policy.is_none() && protected_refs.is_empty() {
                 issues.push(issue(
                     ValidationErrorKind::InvalidHookMode,
-                    "hooks.generated".to_string(),
-                    "generated hook mode requires a [hooks.generated] table".to_string(),
+                    "hooks.mode".to_string(),
+                    "generated hook mode requires protected_refs and/or local_policy".to_string(),
                 ));
-                return None;
-            };
-            if generated.hooks.is_empty() {
-                issues.push(issue(
-                    ValidationErrorKind::InvalidHookMode,
-                    "hooks.generated.hooks".to_string(),
-                    "generated hook mode requires at least one hook name".to_string(),
-                ));
-            }
-            for hook in &generated.hooks {
-                if hook.trim().is_empty() {
-                    issues.push(issue(
-                        ValidationErrorKind::InvalidHookMode,
-                        "hooks.generated.hooks".to_string(),
-                        "hook names must not be empty".to_string(),
-                    ));
-                }
             }
 
             Some(HooksConfig {
-                mode: HookMode::Generated {
-                    hooks: generated.hooks.clone(),
-                },
+                mode: HookMode::Generated,
             })
         }
         other => {
             issues.push(issue(
                 ValidationErrorKind::InvalidHookMode,
                 "hooks.mode".to_string(),
-                format!(
-                    "unsupported hook mode {other:?}; expected \"repo-owned\" or \"generated\""
-                ),
+                format!("unsupported hook mode {other:?}; expected \"generated\""),
             ));
             None
         }

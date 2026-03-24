@@ -3,6 +3,7 @@ use std::process::ExitCode;
 
 use repocert::config::LoadError;
 use repocert::enforcement::{AuthorizeError, AuthorizeOptions, authorize_ref_update};
+use repocert::hooks::GeneratedHook;
 use repocert::local_policy::{
     LocalPolicyError, LocalPolicyOptions, LocalPolicyViolation, check_local_commit_policy,
 };
@@ -16,13 +17,18 @@ pub(super) fn run(args: HookArgs) -> ExitCode {
 }
 
 fn run_hook(args: HookRunArgs) -> ExitCode {
-    match args.hook.as_str() {
-        "pre-commit" | "pre-merge-commit" => run_local_policy_hook(args),
-        "pre-push" => run_pre_push_hook(args),
-        "update" => run_update_hook(args),
+    match GeneratedHook::parse(args.hook.as_str()) {
+        Some(GeneratedHook::PreCommit | GeneratedHook::PreMergeCommit) => {
+            run_local_policy_hook(args)
+        }
+        Some(GeneratedHook::PrePush) => run_pre_push_hook(args),
+        Some(GeneratedHook::Update) => run_update_hook(args),
         other => {
             eprintln!("FAIL hook [input]");
-            eprintln!("unsupported generated hook {other:?}");
+            eprintln!(
+                "unsupported generated hook {:?}",
+                other.map(|hook| hook.as_str())
+            );
             ExitCode::from(1)
         }
     }

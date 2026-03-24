@@ -64,18 +64,13 @@ pub(super) struct RawLocalPolicy {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct RawHooks {
     pub mode: String,
-    pub repo_owned: Option<RawRepoOwnedHooks>,
     pub generated: Option<RawGeneratedHooks>,
 }
 
 #[derive(Debug, Deserialize)]
-pub(super) struct RawRepoOwnedHooks {
-    pub path: String,
-}
-
-#[derive(Debug, Deserialize)]
 pub(super) struct RawGeneratedHooks {
-    pub hooks: Vec<String>,
+    pub hooks: Option<Vec<String>>,
 }

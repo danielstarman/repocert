@@ -43,9 +43,6 @@ require_clean_primary_checkout = true
 
 [hooks]
 mode = "generated"
-
-[hooks.generated]
-hooks = ["pre-commit", "pre-merge-commit", "pre-push", "update"]
 "#
     )
 }

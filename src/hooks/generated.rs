@@ -1,25 +1,25 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::config::Contract;
 use crate::hooks::InstallHooksError;
 
-const SUPPORTED_GENERATED_HOOKS: &[&str] =
-    &["pre-commit", "pre-merge-commit", "pre-push", "update"];
+use super::types::GeneratedHook;
 
-pub(super) fn validate_supported_hooks(
-    paths: &crate::config::LoadPaths,
-    hooks: &[String],
-) -> Result<(), InstallHooksError> {
-    for hook in hooks {
-        if !SUPPORTED_GENERATED_HOOKS.contains(&hook.as_str()) {
-            return Err(InstallHooksError::UnsupportedGeneratedHook {
-                paths: paths.clone(),
-                hook: hook.clone(),
-            });
-        }
+pub(super) fn generated_hooks_for_contract(contract: &Contract) -> Vec<GeneratedHook> {
+    let mut hooks = Vec::new();
+
+    if contract.local_policy.is_some() {
+        hooks.push(GeneratedHook::PreCommit);
+        hooks.push(GeneratedHook::PreMergeCommit);
     }
 
-    Ok(())
+    if !contract.protected_refs.is_empty() {
+        hooks.push(GeneratedHook::PrePush);
+        hooks.push(GeneratedHook::Update);
+    }
+
+    hooks
 }
 
 pub(super) fn generated_hooks_dir(git_dir: &Path) -> PathBuf {
@@ -29,7 +29,7 @@ pub(super) fn generated_hooks_dir(git_dir: &Path) -> PathBuf {
 pub(super) fn sync_generated_hooks(
     paths: &crate::config::LoadPaths,
     hooks_dir: &Path,
-    hooks: &[String],
+    hooks: &[GeneratedHook],
     executable_path: &Path,
 ) -> Result<Vec<String>, InstallHooksError> {
     fs::create_dir_all(hooks_dir).map_err(|source| InstallHooksError::GeneratedHookWrite {
@@ -41,7 +41,7 @@ pub(super) fn sync_generated_hooks(
 
     let mut repaired = Vec::new();
     for hook in hooks {
-        let path = hooks_dir.join(hook);
+        let path = hooks_dir.join(hook.as_str());
         let content = hook_script(hook, executable_path, &paths.repo_root);
         let needs_write = match fs::read_to_string(&path) {
             Ok(existing) => existing != content,
@@ -51,23 +51,24 @@ pub(super) fn sync_generated_hooks(
         if needs_write {
             fs::write(&path, content).map_err(|source| InstallHooksError::GeneratedHookWrite {
                 paths: paths.clone(),
-                hook: hook.clone(),
+                hook: hook.as_str().to_string(),
                 path: path.clone(),
                 source,
             })?;
             set_executable(&path).map_err(|source| InstallHooksError::GeneratedHookWrite {
                 paths: paths.clone(),
-                hook: hook.clone(),
+                hook: hook.as_str().to_string(),
                 path: path.clone(),
                 source,
             })?;
-            repaired.push(format!("generated hook {hook}"));
+            repaired.push(format!("generated hook {}", hook.as_str()));
         }
     }
 
     let desired = hooks
         .iter()
-        .cloned()
+        .map(GeneratedHook::as_str)
+        .map(str::to_string)
         .collect::<std::collections::BTreeSet<_>>();
     for entry in
         fs::read_dir(hooks_dir).map_err(|source| InstallHooksError::GeneratedHookPrune {
@@ -97,23 +98,22 @@ pub(super) fn sync_generated_hooks(
     Ok(repaired)
 }
 
-fn hook_script(hook: &str, executable_path: &Path, repo_root: &Path) -> String {
+fn hook_script(hook: &GeneratedHook, executable_path: &Path, repo_root: &Path) -> String {
     let exe = shell_quote(executable_path);
     let repo = shell_quote(repo_root);
     match hook {
-        "pre-commit" => {
+        GeneratedHook::PreCommit => {
             format!("#!/bin/sh\nset -eu\nexec {exe} hook run --repo-root {repo} pre-commit\n")
         }
-        "pre-merge-commit" => {
+        GeneratedHook::PreMergeCommit => {
             format!("#!/bin/sh\nset -eu\nexec {exe} hook run --repo-root {repo} pre-merge-commit\n")
         }
-        "update" => format!(
+        GeneratedHook::Update => format!(
             "#!/bin/sh\nset -eu\nexec {exe} hook run --repo-root {repo} update \"$1\" \"$2\" \"$3\"\n"
         ),
-        "pre-push" => {
+        GeneratedHook::PrePush => {
             format!("#!/bin/sh\nset -eu\nexec {exe} hook run --repo-root {repo} pre-push\n")
         }
-        other => unreachable!("unsupported generated hook {other}"),
     }
 }
 

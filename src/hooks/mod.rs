@@ -5,4 +5,4 @@ mod types;
 
 pub use error::InstallHooksError;
 pub use service::install_hooks;
-pub use types::{HookInstallMode, InstallHooksOptions, InstallHooksReport};
+pub use types::{GeneratedHook, HookInstallMode, InstallHooksOptions, InstallHooksReport};

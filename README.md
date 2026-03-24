@@ -41,6 +41,9 @@ default = true
 [[protected_refs]]
 pattern = "refs/heads/main"
 profile = "default"
+
+[hooks]
+mode = "generated"
 ```
 
 Then:
@@ -54,6 +57,9 @@ repocert install-hooks              # wire enforcement into git hooks
 ```
 
 A push to `main` is blocked unless the target commit is certified.
+In generated mode, repocert derives the hooks it manages from the contract:
+`pre-push` and `update` for protected ref enforcement, plus `pre-commit` and
+`pre-merge-commit` when local policy is enabled.
 
 In worktree-based repos, run `repocert install-hooks` once per checkout/worktree.
 As of `0.1.1`, generated hook installation is checkout-local so one worktree

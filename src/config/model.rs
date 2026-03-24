@@ -73,8 +73,7 @@ pub struct HooksConfig {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum HookMode {
-    RepoOwned { path: RepoPath },
-    Generated { hooks: Vec<String> },
+    Generated,
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
