@@ -76,6 +76,9 @@ fn render_human_success(report: &StatusReport) {
                 result.other_certified_commits.join(", ")
             );
         }
+        if let Some(signer_name) = &result.signer_name {
+            println!("  signer_name: {}", signer_name);
+        }
         if let Some(fingerprint) = &result.recorded_fingerprint {
             println!(
                 "  recorded_fingerprint: {}",
@@ -198,6 +201,7 @@ fn profile_result_json(result: &StatusProfileResult) -> Value {
         "other_certified_commits".to_string(),
         json!(result.other_certified_commits),
     );
+    extra_fields.insert("signer_name".to_string(), json!(result.signer_name));
     extra_fields.insert(
         "recorded_fingerprint".to_string(),
         json!(result.recorded_fingerprint.as_ref().map(fingerprint_string)),

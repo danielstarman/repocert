@@ -49,6 +49,8 @@ pub struct AuthorizeProfileResult {
     pub profile: String,
     /// Certification state for the profile.
     pub state: AuthorizeProfileState,
+    /// Repo-trusted signer name for a matching signed record, when available.
+    pub signer_name: Option<String>,
 }
 
 /// Full decision for one attempted ref update.

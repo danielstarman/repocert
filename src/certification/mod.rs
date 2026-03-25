@@ -11,7 +11,7 @@ pub use error::{FingerprintError, SigningError, StorageError};
 pub use fingerprint::compute_contract_fingerprint;
 pub use signing::{
     SIGNING_NAMESPACE, compute_ssh_key_fingerprint, encode_payload_for_signing,
-    sign_payload_with_ssh, verify_payload_with_ssh,
+    find_trusted_signer, sign_payload_with_ssh, verify_payload_with_ssh,
 };
 /// Git-local certification record store.
 pub use store::CertificationStore;

@@ -2,7 +2,7 @@ use crate::config::{CertificationConfig, CertificationMode};
 
 use super::{
     CertificationKey, CertificationRecord, CertificationStore, ContractFingerprint, StorageError,
-    verify_payload_with_ssh,
+    find_trusted_signer, verify_payload_with_ssh,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -20,6 +20,7 @@ pub(crate) enum ProfileCertificationState {
 pub(crate) struct ProfileCertificationInspection {
     pub profile: String,
     pub state: ProfileCertificationState,
+    pub signer_name: Option<String>,
     pub other_certified_commits: Vec<String>,
     pub recorded_fingerprint: Option<ContractFingerprint>,
 }
@@ -44,6 +45,7 @@ pub(crate) fn inspect_profile_certification(
         return Ok(ProfileCertificationInspection {
             profile: profile.to_string(),
             state,
+            signer_name: signer_name_for_record(&record, certification),
             other_certified_commits: Vec::new(),
             recorded_fingerprint: Some(record.contract_fingerprint().clone()),
         });
@@ -61,6 +63,7 @@ pub(crate) fn inspect_profile_certification(
         Ok(ProfileCertificationInspection {
             profile: profile.to_string(),
             state: ProfileCertificationState::Uncertified,
+            signer_name: None,
             other_certified_commits: Vec::new(),
             recorded_fingerprint: None,
         })
@@ -68,10 +71,29 @@ pub(crate) fn inspect_profile_certification(
         Ok(ProfileCertificationInspection {
             profile: profile.to_string(),
             state: ProfileCertificationState::StaleCommit,
+            signer_name: None,
             other_certified_commits: other_commits,
             recorded_fingerprint: None,
         })
     }
+}
+
+fn signer_name_for_record(
+    record: &CertificationRecord,
+    certification: Option<&CertificationConfig>,
+) -> Option<String> {
+    let CertificationRecord::Signed(record) = record else {
+        return None;
+    };
+    let Some(CertificationConfig {
+        mode: CertificationMode::SshSigned { trusted_signer },
+    }) = certification
+    else {
+        return None;
+    };
+
+    find_trusted_signer(trusted_signer, &record.signer_fingerprint)
+        .map(|signer| signer.name.clone())
 }
 
 fn authenticate_record(

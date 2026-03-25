@@ -77,6 +77,9 @@ fn render_human_success(report: &AuthorizeReport) {
             result.profile,
             state_label(&result.state)
         );
+        if let Some(signer_name) = &result.signer_name {
+            println!("  signer_name: {}", signer_name);
+        }
     }
 
     println!("allowed: {}", report.allowed);
@@ -163,7 +166,9 @@ fn matched_rule_json(rule: &MatchedRule) -> Value {
 }
 
 fn profile_result_json(result: &AuthorizeProfileResult) -> Value {
-    profile_state_result(&result.profile, state_label(&result.state), Map::new())
+    let mut extra_fields = Map::new();
+    extra_fields.insert("signer_name".to_string(), json!(result.signer_name));
+    profile_state_result(&result.profile, state_label(&result.state), extra_fields)
 }
 
 fn state_label(state: &AuthorizeProfileState) -> &'static str {

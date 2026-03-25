@@ -79,6 +79,7 @@ pub fn authorize_ref_update(options: AuthorizeOptions) -> Result<AuthorizeReport
             .map(|inspection| AuthorizeProfileResult {
                 profile: inspection.profile,
                 state: map_profile_state(inspection.state),
+                signer_name: inspection.signer_name,
             })
             .map_err(|error| AuthorizeError::Storage {
                 paths: loaded.paths.clone(),

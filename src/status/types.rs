@@ -40,6 +40,8 @@ pub struct StatusProfileResult {
     pub profile: String,
     /// Certification state for the profile.
     pub state: StatusProfileState,
+    /// Repo-trusted signer name for a matching signed record, when available.
+    pub signer_name: Option<String>,
     /// Other commits that are certified for the same profile.
     pub other_certified_commits: Vec<String>,
     /// Recorded fingerprint for the matching record, if one exists.

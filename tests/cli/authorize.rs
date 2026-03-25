@@ -376,6 +376,7 @@ profile = "release"
     let json: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["allowed"], true);
     assert_eq!(json["profile_results"][0]["state"], "certified");
+    assert_eq!(json["profile_results"][0]["signer_name"], "test");
 }
 
 #[test]

@@ -67,6 +67,7 @@ pub fn run_status(options: StatusOptions) -> Result<StatusReport, StatusError> {
             .map(|inspection| StatusProfileResult {
                 profile: inspection.profile,
                 state: map_profile_state(&inspection.state),
+                signer_name: inspection.signer_name,
                 other_certified_commits: inspection.other_certified_commits,
                 recorded_fingerprint: inspection.recorded_fingerprint,
             })

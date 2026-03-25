@@ -345,6 +345,57 @@ public_key = "{public_key}"
     assert_eq!(json["summary"]["legacy_unsigned"], 1);
 }
 
+#[test]
+fn status_signed_mode_reports_signer_name() {
+    let repo = TempDir::new().unwrap();
+    let (_key_dir, public_key_path, public_key) = generate_ssh_signer();
+    init_git_repo(&repo);
+    write_repo_file(
+        &repo,
+        ".repocert/config.toml",
+        &format!(
+            r#"
+schema_version = 1
+
+[checks.test]
+argv = ["sh", "-c", "exit 0"]
+
+[profiles.default]
+checks = ["test"]
+certify = true
+default = true
+
+[certification]
+mode = "ssh-signed"
+
+[[certification.trusted_signer]]
+name = "test"
+public_key = "{public_key}"
+"#
+        ),
+    );
+    commit_all(&repo, "initial");
+    let certify = Command::new(repocert_bin())
+        .args([
+            "certify",
+            "--format",
+            "json",
+            "--signing-key",
+            public_key_path.to_str().unwrap(),
+        ])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+    assert!(certify.status.success());
+
+    let output = run_status(&["--format", "json"], repo.path());
+
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["profile_results"][0]["state"], "certified");
+    assert_eq!(json["profile_results"][0]["signer_name"], "test");
+}
+
 fn head_commit_previous(repo: &TempDir) -> String {
     let output = Command::new("git")
         .args(["rev-parse", "HEAD^"])

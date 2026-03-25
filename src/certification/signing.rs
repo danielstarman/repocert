@@ -82,15 +82,12 @@ pub fn verify_payload_with_ssh(
 ) -> Result<(), SigningError> {
     validate_signed_record(record)?;
 
-    let Some(index) = trusted_signer
-        .iter()
-        .position(|signer| signer.fingerprint == record.signer_fingerprint)
+    let Some(trusted_signer) = find_trusted_signer(trusted_signer, &record.signer_fingerprint)
     else {
         return Err(SigningError::UntrustedSigner {
             fingerprint: record.signer_fingerprint.clone(),
         });
     };
-    let trusted_signer = &trusted_signer[index].public_key;
 
     let payload_file = NamedTempFile::new().map_err(|source| SigningError::TempFile { source })?;
     let payload_bytes = encode_payload_for_signing(&record.payload);
@@ -106,7 +103,7 @@ pub fn verify_payload_with_ssh(
         NamedTempFile::new().map_err(|source| SigningError::TempFile { source })?;
     fs::write(
         allowed_signers.path(),
-        allowed_signers_entry(&record.signer_fingerprint, trusted_signer),
+        allowed_signers_entry(&record.signer_fingerprint, &trusted_signer.public_key),
     )
     .map_err(|source| SigningError::TempFile { source })?;
 
@@ -134,6 +131,16 @@ pub fn verify_payload_with_ssh(
             fingerprint: record.signer_fingerprint.clone(),
         })
     }
+}
+
+/// Look up a repo-trusted signer entry by fingerprint.
+pub fn find_trusted_signer<'a>(
+    trusted_signer: &'a [TrustedSigner],
+    fingerprint: &str,
+) -> Option<&'a TrustedSigner> {
+    trusted_signer
+        .iter()
+        .find(|signer| signer.fingerprint == fingerprint)
 }
 
 fn validate_signed_record(record: &SignedCertificationRecord) -> Result<(), SigningError> {
