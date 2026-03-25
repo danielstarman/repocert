@@ -56,6 +56,7 @@ This repository builds `repocert`, a repository contract, certification, and enf
 - If local policy blocks commits in the primary checkout, create a dedicated worktree/branch for implementation work.
 - Do normal development in that worktree, commit there, and run `repocert certify` on the exact worktree `HEAD`.
 - Bring the certified commit back to `main` via merge or fast-forward instead of developing directly on protected `main`.
+- This repo may keep `main` gated by the fast default profile while reserving a stricter `release` profile for `release/*` branches and `v*` release tags when release-only checks like docs builds should not slow down everyday certification.
 
 ## Issue Hygiene
 

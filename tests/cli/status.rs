@@ -63,9 +63,13 @@ fn status_current_repo_reports_default_profile_and_main_protection() {
     let json: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["ok"], true);
     assert_eq!(json["error"], Value::Null);
-    assert_eq!(json["profiles"], serde_json::json!(["default"]));
+    assert_eq!(json["profiles"], serde_json::json!(["default", "release"]));
     assert_eq!(json["protected_refs"][0]["pattern"], "refs/heads/main");
     assert_eq!(json["protected_refs"][0]["profile"], "default");
+    assert_eq!(json["protected_refs"][1]["pattern"], "refs/heads/release/*");
+    assert_eq!(json["protected_refs"][1]["profile"], "release");
+    assert_eq!(json["protected_refs"][2]["pattern"], "refs/tags/v*");
+    assert_eq!(json["protected_refs"][2]["profile"], "release");
 }
 
 #[test]

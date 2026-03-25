@@ -14,16 +14,30 @@ argv = ["cargo", "fmt"]
 probe_argv = ["cargo", "fmt", "--check"]
 
 [profiles.default]
-checks = ["docs", "fmt", "test"]
+checks = ["fmt", "test"]
 fixers = ["fmt"]
+certify = true
+default = true
+
+[profiles.release]
+includes = ["default"]
+checks = ["docs"]
 certify = true
 
 [[protected_refs]]
 pattern = "refs/heads/main"
 profile = "default"
 
+[[protected_refs]]
+pattern = "refs/heads/release/*"
+profile = "release"
+
+[[protected_refs]]
+pattern = "refs/tags/v*"
+profile = "release"
+
 [local_policy]
-protected_branches = ["refs/heads/main"]
+protected_branches = ["refs/heads/main", "refs/heads/release/*"]
 require_clean_primary_checkout = true
 
 [hooks]

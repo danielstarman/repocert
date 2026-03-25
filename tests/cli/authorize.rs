@@ -182,6 +182,138 @@ profile = "release"
 }
 
 #[test]
+fn authorize_release_branch_requires_release_profile() {
+    let repo = TempDir::new().unwrap();
+    init_git_repo(&repo);
+    write_repo_file(
+        &repo,
+        ".repocert/config.toml",
+        r#"
+schema_version = 1
+
+[checks.fast]
+argv = ["sh", "-c", "exit 0"]
+
+[checks.docs]
+argv = ["sh", "-c", "exit 0"]
+
+[profiles.default]
+checks = ["fast"]
+certify = true
+default = true
+
+[profiles.release]
+includes = ["default"]
+checks = ["docs"]
+certify = true
+
+[[protected_refs]]
+pattern = "refs/heads/main"
+profile = "default"
+
+[[protected_refs]]
+pattern = "refs/heads/release/*"
+profile = "release"
+
+[[protected_refs]]
+pattern = "refs/tags/v*"
+profile = "release"
+"#,
+    );
+    commit_all(&repo, "initial");
+    let certify = Command::new(repocert_bin())
+        .args(["certify", "--format", "json"])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+    assert!(certify.status.success());
+    let head = head_commit(&repo);
+
+    let output = run_authorize(
+        &[
+            "1111111111111111111111111111111111111111",
+            &head,
+            "refs/heads/release/0.3",
+            "--format",
+            "json",
+        ],
+        repo.path(),
+    );
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["allowed"], false);
+    assert_eq!(json["required_profiles"], serde_json::json!(["release"]));
+    assert_eq!(json["profile_results"][0]["state"], "uncertified");
+}
+
+#[test]
+fn authorize_release_tag_requires_release_profile() {
+    let repo = TempDir::new().unwrap();
+    init_git_repo(&repo);
+    write_repo_file(
+        &repo,
+        ".repocert/config.toml",
+        r#"
+schema_version = 1
+
+[checks.fast]
+argv = ["sh", "-c", "exit 0"]
+
+[checks.docs]
+argv = ["sh", "-c", "exit 0"]
+
+[profiles.default]
+checks = ["fast"]
+certify = true
+default = true
+
+[profiles.release]
+includes = ["default"]
+checks = ["docs"]
+certify = true
+
+[[protected_refs]]
+pattern = "refs/heads/main"
+profile = "default"
+
+[[protected_refs]]
+pattern = "refs/heads/release/*"
+profile = "release"
+
+[[protected_refs]]
+pattern = "refs/tags/v*"
+profile = "release"
+"#,
+    );
+    commit_all(&repo, "initial");
+    let certify = Command::new(repocert_bin())
+        .args(["certify", "--format", "json"])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+    assert!(certify.status.success());
+    let head = head_commit(&repo);
+
+    let output = run_authorize(
+        &[
+            "1111111111111111111111111111111111111111",
+            &head,
+            "refs/tags/v0.3.0",
+            "--format",
+            "json",
+        ],
+        repo.path(),
+    );
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["allowed"], false);
+    assert_eq!(json["required_profiles"], serde_json::json!(["release"]));
+    assert_eq!(json["profile_results"][0]["state"], "uncertified");
+}
+
+#[test]
 fn authorize_signed_mode_with_valid_signed_certification_allows() {
     let repo = TempDir::new().unwrap();
     let (_key_dir, public_key_path, public_key) = generate_ssh_signer();
