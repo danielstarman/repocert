@@ -6,12 +6,15 @@ argv = ["cargo", "fmt", "--check"]
 [checks.test]
 argv = ["cargo", "test"]
 
+[checks.docs]
+argv = ["sh", "-c", "RUSTDOCFLAGS='-D warnings' cargo doc --no-deps"]
+
 [fixers.fmt]
 argv = ["cargo", "fmt"]
 probe_argv = ["cargo", "fmt", "--check"]
 
 [profiles.default]
-checks = ["fmt", "test"]
+checks = ["docs", "fmt", "test"]
 fixers = ["fmt"]
 certify = true
 

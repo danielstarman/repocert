@@ -6,6 +6,7 @@ use crate::git::resolve_git_common_dir;
 use super::{CertificationStore, layout, records};
 
 impl CertificationStore {
+    /// Open the git-local certification store for a repository or linked worktree.
     pub fn open(repo_root: &Path) -> Result<Self, StorageError> {
         let common_dir = resolve_git_common_dir(repo_root)?;
         let root_dir = common_dir.join("repocert").join("certifications");
@@ -15,14 +16,17 @@ impl CertificationStore {
         })
     }
 
+    /// Return the canonical git common directory used by this store.
     pub fn common_dir(&self) -> &Path {
         &self.common_dir
     }
 
+    /// Return the root directory containing certification records.
     pub fn root_dir(&self) -> &Path {
         &self.root_dir
     }
 
+    /// Read the certification record for a specific `(commit, profile)` pair.
     pub fn read(
         &self,
         key: &CertificationKey,
@@ -35,11 +39,13 @@ impl CertificationStore {
         Ok(Some(records::read_record(&path, key)?))
     }
 
+    /// Write or replace the certification record for a specific `(commit, profile)` pair.
     pub fn write(&self, record: &CertificationRecord) -> Result<(), StorageError> {
         let directory = layout::commit_dir(&self.root_dir, &record.key().commit)?;
         records::write_record(&directory, record)
     }
 
+    /// List all certification records stored for a commit.
     pub fn list_for_commit(&self, commit: &str) -> Result<Vec<CertificationRecord>, StorageError> {
         let directory = layout::commit_dir(&self.root_dir, commit)?;
         if !directory.exists() {
@@ -51,6 +57,7 @@ impl CertificationStore {
         Ok(entries)
     }
 
+    /// List all certification records stored for a profile across commits.
     pub fn list_for_profile(
         &self,
         profile: &str,

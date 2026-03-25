@@ -6,9 +6,11 @@ use tempfile::{NamedTempFile, TempDir};
 
 use super::{CertificationBackend, CertificationPayload, SignedCertificationRecord, SigningError};
 
+/// SSH signature namespace used for authenticated certification records.
 pub const SIGNING_NAMESPACE: &str = "repocert-certification";
 pub const SIGNED_RECORD_VERSION: u64 = 1;
 
+/// Encode the signed certification payload into deterministic bytes for signing.
 pub fn encode_payload_for_signing(payload: &CertificationPayload) -> Vec<u8> {
     let mut encoded = String::new();
     encoded.push_str("repocert-certification-v1\n");
@@ -24,6 +26,7 @@ pub fn encode_payload_for_signing(payload: &CertificationPayload) -> Vec<u8> {
     encoded.into_bytes()
 }
 
+/// Compute the SHA-256 fingerprint for an SSH public key file.
 pub fn compute_ssh_key_fingerprint(key_path: &Path) -> Result<String, SigningError> {
     ensure_key_file(key_path)?;
 
@@ -37,6 +40,7 @@ pub fn compute_ssh_key_fingerprint(key_path: &Path) -> Result<String, SigningErr
     parse_fingerprint(&output.stdout)
 }
 
+/// Produce an SSH-signed certification envelope for the given payload.
 pub fn sign_payload_with_ssh(
     signing_key: &Path,
     payload: &CertificationPayload,
@@ -70,6 +74,7 @@ pub fn sign_payload_with_ssh(
     })
 }
 
+/// Verify an SSH-signed certification record against repo-trusted signer keys.
 pub fn verify_payload_with_ssh(
     record: &SignedCertificationRecord,
     trusted_signers: &[String],

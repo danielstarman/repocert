@@ -5,64 +5,106 @@ use std::string::FromUtf8Error;
 
 use thiserror::Error;
 
+/// High-level contract loading failures.
 #[derive(Debug, Error)]
 pub enum LoadError {
+    /// Config discovery failed before a config file was fully resolved.
     #[error(transparent)]
     Discovery(#[from] DiscoveryError),
+    /// Parsing raw config bytes into TOML failed.
     #[error(transparent)]
     Parse(#[from] ParseError),
+    /// Structural contract validation failed.
     #[error(transparent)]
     Validation(#[from] ValidationErrors),
 }
 
+/// Errors produced while discovering the repository root and config file.
 #[derive(Debug, Error)]
 pub enum DiscoveryError {
+    /// The current working directory could not be determined.
     #[error("could not determine the current working directory: {source}")]
     CurrentDir {
+        /// Underlying filesystem error.
         #[source]
         source: std::io::Error,
     },
+    /// Upward config discovery did not find `.repocert/config.toml`.
     #[error("could not find .repocert/config.toml by walking upward from {start_dir}")]
-    ConfigNotFound { start_dir: PathBuf },
+    ConfigNotFound {
+        /// Directory discovery started from.
+        start_dir: PathBuf,
+    },
+    /// An explicitly supplied repository root was invalid.
     #[error("repo root {path} is invalid: {reason}")]
-    InvalidRepoRoot { path: PathBuf, reason: String },
+    InvalidRepoRoot {
+        /// Invalid repository root path.
+        path: PathBuf,
+        /// Human-readable reason the path was rejected.
+        reason: String,
+    },
+    /// An explicitly supplied config path was invalid.
     #[error("explicit config path {path} is invalid: {reason}")]
-    InvalidExplicitConfigPath { path: PathBuf, reason: String },
+    InvalidExplicitConfigPath {
+        /// Invalid config path.
+        path: PathBuf,
+        /// Human-readable reason the path was rejected.
+        reason: String,
+    },
+    /// The explicit repo root did not contain the required default config path.
     #[error(
         "explicit repo root {repo_root} does not contain required config file at {config_path}"
     )]
     MissingConfigAtRepoRoot {
+        /// Explicit repository root path.
         repo_root: PathBuf,
+        /// Expected config path under that repository root.
         config_path: PathBuf,
     },
+    /// Explicit repo root and config path did not refer to the same repository.
     #[error("explicit repo root {repo_root} and config path {config_path} do not match")]
     ExplicitPathsMismatch {
+        /// Explicit repository root path.
         repo_root: PathBuf,
+        /// Explicit config path.
         config_path: PathBuf,
     },
+    /// A filesystem I/O error occurred during discovery.
     #[error("I/O error at {path}: {source}")]
     Io {
+        /// Path associated with the I/O failure.
         path: PathBuf,
+        /// Underlying filesystem error.
         #[source]
         source: std::io::Error,
     },
 }
 
+/// Errors produced while parsing the raw config file.
 #[derive(Debug)]
 pub enum ParseError {
+    /// The config file bytes were not valid UTF-8.
     InvalidUtf8 {
+        /// Config file path.
         path: PathBuf,
+        /// Underlying UTF-8 conversion error.
         source: FromUtf8Error,
     },
+    /// TOML parsing failed.
     InvalidToml {
+        /// Config file path.
         path: PathBuf,
+        /// Parser-provided error message.
         message: String,
+        /// 1-based line number, when available.
         line: Option<usize>,
+        /// 1-based column number, when available.
         column: Option<usize>,
     },
 }
 
 impl ParseError {
+    /// Build a TOML parse error with resolved line/column information.
     pub fn from_toml(path: &PathBuf, content: &str, source: toml::de::Error) -> Self {
         let (line, column) = source
             .span()
@@ -113,35 +155,55 @@ impl StdError for ParseError {
     }
 }
 
+/// Kinds of structural contract validation issues.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ValidationErrorKind {
+    /// `schema_version` did not match the supported version.
     SchemaVersion,
+    /// A named item used an empty or whitespace-only name.
     EmptyName,
+    /// A declared command or fixer command was structurally invalid.
     InvalidCommand,
+    /// A profile, check, or fixer reference pointed at an unknown item.
     UnknownReference,
+    /// Profile includes formed a cycle.
     ProfileCycle,
+    /// Default-profile configuration was invalid.
     InvalidDefaultProfile,
+    /// Certification-profile configuration was invalid.
     InvalidCertifyProfile,
+    /// A protected contract path was invalid.
     InvalidProtectedPath,
+    /// A protected-ref rule was invalid.
     InvalidProtectedRef,
+    /// Certification signing/trust config was invalid.
     InvalidCertificationConfig,
+    /// Local policy config was invalid.
     InvalidLocalPolicy,
+    /// Hook installation config was invalid.
     InvalidHookMode,
 }
 
+/// One structural validation issue found while loading the contract.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ValidationIssue {
+    /// Issue kind.
     pub kind: ValidationErrorKind,
+    /// Machine-readable subject describing where the issue occurred.
     pub subject: String,
+    /// Human-readable issue message.
     pub message: String,
 }
 
+/// Collection of structural contract validation issues.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ValidationErrors {
+    /// Sorted validation issues.
     pub issues: Vec<ValidationIssue>,
 }
 
 impl ValidationErrors {
+    /// Create a sorted validation error collection.
     pub fn new(mut issues: Vec<ValidationIssue>) -> Self {
         issues.sort_by(|left, right| {
             left.subject

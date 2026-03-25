@@ -3,19 +3,25 @@ use thiserror::Error;
 use crate::config::{LoadFailure, LoadPaths};
 use crate::contract::SelectionError;
 
+/// Errors returned while running `repocert check`.
 #[derive(Debug, Error)]
 pub enum CheckError {
+    /// Contract discovery, parsing, or validation failed before execution.
     #[error(transparent)]
     Load(#[from] LoadFailure),
+    /// Profile or named-check selection failed.
     #[error("{error}")]
     Selection {
+        /// Resolved repository/config paths.
         paths: LoadPaths,
+        /// Underlying selection error.
         #[source]
         error: CheckSelectionError,
     },
 }
 
 impl CheckError {
+    /// Return resolved paths when they were available for this failure.
     pub fn paths(&self) -> Option<&LoadPaths> {
         match self {
             Self::Load(error) => error.paths.as_ref(),
@@ -24,16 +30,21 @@ impl CheckError {
     }
 }
 
+/// Selection errors specific to `repocert check`.
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum CheckSelectionError {
+    /// `--profile` and `--name` selectors were used together.
     #[error("`check` selector modes are mutually exclusive; use either `--profile` or `--name`")]
     ConflictingSelectors,
+    /// No explicit profile was selected and no default profile exists.
     #[error(
         "no profile selector was provided and no implicit or explicit default profile is available"
     )]
     NoDefaultProfile,
+    /// One or more selected profiles were not found.
     #[error("unknown profile selector(s): {0}")]
     UnknownProfiles(String),
+    /// One or more selected named checks were not found.
     #[error("unknown named check selector(s): {0}")]
     UnknownChecks(String),
 }

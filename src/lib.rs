@@ -1,3 +1,6 @@
+#![deny(missing_docs)]
+#![deny(rustdoc::broken_intra_doc_links)]
+
 //! `repocert` is a local-first library and CLI for repository contract
 //! validation, certification, and protected-ref enforcement.
 //!
