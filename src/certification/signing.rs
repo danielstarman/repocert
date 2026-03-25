@@ -242,6 +242,7 @@ mod tests {
         sign_payload_with_ssh, verify_payload_with_ssh,
     };
     use crate::certification::{CertificationKey, ContractFingerprint, SigningError};
+    use crate::config::TrustedSigner;
 
     #[test]
     fn encode_payload_for_signing_is_deterministic() {
