@@ -248,6 +248,116 @@ default = true
 }
 
 #[test]
+fn status_assert_certified_on_main_infers_default_profile() {
+    let repo = TempDir::new().unwrap();
+    init_git_repo(&repo);
+    write_repo_file(
+        &repo,
+        ".repocert/config.toml",
+        r#"
+schema_version = 1
+
+[checks.fast]
+argv = ["sh", "-c", "exit 0"]
+
+[checks.docs]
+argv = ["sh", "-c", "exit 0"]
+
+[profiles.default]
+checks = ["fast"]
+certify = true
+default = true
+
+[profiles.release]
+includes = ["default"]
+checks = ["docs"]
+certify = true
+
+[[protected_refs]]
+pattern = "refs/heads/main"
+profile = "default"
+
+[[protected_refs]]
+pattern = "refs/heads/release/*"
+profile = "release"
+"#,
+    );
+    commit_all(&repo, "initial");
+    let certify = Command::new(repocert_bin())
+        .arg("certify")
+        .arg("--format")
+        .arg("json")
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+    assert!(certify.status.success());
+
+    let output = run_status(&["--format", "json", "--assert-certified"], repo.path());
+
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["profiles"], serde_json::json!(["default"]));
+    assert_eq!(json["profile_results"][0]["state"], "certified");
+}
+
+#[test]
+fn status_assert_certified_on_release_branch_infers_release_profile() {
+    let repo = TempDir::new().unwrap();
+    init_git_repo(&repo);
+    write_repo_file(
+        &repo,
+        ".repocert/config.toml",
+        r#"
+schema_version = 1
+
+[checks.fast]
+argv = ["sh", "-c", "exit 0"]
+
+[checks.docs]
+argv = ["sh", "-c", "exit 0"]
+
+[profiles.default]
+checks = ["fast"]
+certify = true
+default = true
+
+[profiles.release]
+includes = ["default"]
+checks = ["docs"]
+certify = true
+
+[[protected_refs]]
+pattern = "refs/heads/main"
+profile = "default"
+
+[[protected_refs]]
+pattern = "refs/heads/release/*"
+profile = "release"
+"#,
+    );
+    commit_all(&repo, "initial");
+    let checkout = Command::new("git")
+        .args(["checkout", "-q", "-b", "release/0.3"])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+    assert!(checkout.status.success());
+    let certify = Command::new(repocert_bin())
+        .args(["certify", "--profile", "release", "--format", "json"])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+    assert!(certify.status.success());
+
+    let output = run_status(&["--format", "json", "--assert-certified"], repo.path());
+
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["profiles"], serde_json::json!(["release"]));
+    assert_eq!(json["profile_results"][0]["state"], "certified");
+}
+
+#[test]
 fn status_protected_refs_report_certification_state() {
     // Arrange
     let repo = TempDir::new().unwrap();

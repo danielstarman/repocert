@@ -3,6 +3,8 @@ use crate::certification::{
     inspect_profile_certification,
 };
 use crate::config::load_contract;
+use crate::contract::matches_pattern;
+use crate::git::inspect_checkout;
 use crate::git::{resolve_commit, resolve_head_commit};
 
 use super::error::{StatusError, StatusSelectionError};
@@ -21,13 +23,26 @@ pub fn run_status(options: StatusOptions) -> Result<StatusReport, StatusError> {
     } = options;
 
     let loaded = load_contract(load_options)?;
-    let selected_profiles =
-        resolve_status_profiles(&loaded.contract, &profiles).map_err(|error| {
-            StatusError::Selection {
+    let current_ref = if assert_certified && profiles.is_empty() && commit.is_none() {
+        inspect_checkout(&loaded.paths.repo_root)
+            .map_err(|error| StatusError::GitCheckout {
                 paths: loaded.paths.clone(),
                 error,
-            }
-        })?;
+            })?
+            .head_ref
+    } else {
+        None
+    };
+    let selected_profiles = resolve_status_profiles(
+        &loaded.contract,
+        &profiles,
+        assert_certified,
+        current_ref.as_deref(),
+    )
+    .map_err(|error| StatusError::Selection {
+        paths: loaded.paths.clone(),
+        error,
+    })?;
     let commit = match commit {
         Some(commit) => resolve_commit(&loaded.paths.repo_root, &commit).map_err(|error| {
             StatusError::GitCommit {
@@ -108,14 +123,20 @@ pub fn run_status(options: StatusOptions) -> Result<StatusReport, StatusError> {
 fn resolve_status_profiles(
     contract: &crate::config::Contract,
     requested_profiles: &[String],
+    assert_certified: bool,
+    current_ref: Option<&str>,
 ) -> Result<Vec<String>, StatusSelectionError> {
     let profiles = if requested_profiles.is_empty() {
-        contract
-            .profiles
-            .values()
-            .filter(|profile| profile.certify)
-            .map(|profile| profile.name.clone())
-            .collect::<Vec<_>>()
+        if assert_certified {
+            inferred_assertion_profiles(contract, current_ref)?
+        } else {
+            contract
+                .profiles
+                .values()
+                .filter(|profile| profile.certify)
+                .map(|profile| profile.name.clone())
+                .collect::<Vec<_>>()
+        }
     } else {
         let profiles = crate::contract::resolve_profiles(contract, requested_profiles)
             .map_err(StatusSelectionError::from)?;
@@ -141,6 +162,33 @@ fn resolve_status_profiles(
             non_certifiable.join(", "),
         ))
     }
+}
+
+fn inferred_assertion_profiles(
+    contract: &crate::config::Contract,
+    current_ref: Option<&str>,
+) -> Result<Vec<String>, StatusSelectionError> {
+    if let Some(current_ref) = current_ref {
+        let mut protected_profiles = Vec::new();
+        for rule in &contract.protected_refs {
+            if matches_pattern(&rule.pattern, current_ref).unwrap_or(false)
+                && !protected_profiles
+                    .iter()
+                    .any(|profile| profile == &rule.profile)
+            {
+                protected_profiles.push(rule.profile.clone());
+            }
+        }
+        if !protected_profiles.is_empty() {
+            return Ok(protected_profiles);
+        }
+    }
+
+    if let Some(default_profile) = contract.default_profile.as_ref() {
+        return Ok(vec![default_profile.clone()]);
+    }
+
+    Err(StatusSelectionError::NoAssertionScope)
 }
 
 fn summarize(results: &[StatusProfileResult]) -> StatusSummary {

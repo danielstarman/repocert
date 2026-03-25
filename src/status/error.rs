@@ -3,7 +3,7 @@ use thiserror::Error;
 use crate::certification::{FingerprintError, StorageError};
 use crate::config::{LoadFailure, LoadPaths};
 use crate::contract::SelectionError;
-use crate::git::GitCommitError;
+use crate::git::{GitCheckoutError, GitCommitError};
 
 /// Errors returned while running `repocert status`.
 #[derive(Debug, Error)]
@@ -19,6 +19,15 @@ pub enum StatusError {
         /// Underlying selection error.
         #[source]
         error: StatusSelectionError,
+    },
+    /// Inspecting the current checkout/ref failed while inferring assertion scope.
+    #[error("{error}")]
+    GitCheckout {
+        /// Resolved repository/config paths.
+        paths: LoadPaths,
+        /// Underlying checkout inspection error.
+        #[source]
+        error: GitCheckoutError,
     },
     /// Resolving the commit to inspect failed.
     #[error("{error}")]
@@ -55,6 +64,7 @@ impl StatusError {
         match self {
             Self::Load(error) => error.paths.as_ref(),
             Self::Selection { paths, .. }
+            | Self::GitCheckout { paths, .. }
             | Self::GitCommit { paths, .. }
             | Self::Fingerprint { paths, .. }
             | Self::Storage { paths, .. } => Some(paths),
@@ -65,6 +75,11 @@ impl StatusError {
 /// Profile-selection errors specific to `repocert status`.
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum StatusSelectionError {
+    /// Assertion mode needed an inferred profile scope, but none could be determined.
+    #[error(
+        "status assertion requires an explicit --profile because no protected-ref match or default profile could be inferred"
+    )]
+    NoAssertionScope,
     /// One or more selected profiles were not found.
     #[error("unknown profile selector(s): {0}")]
     UnknownProfiles(String),
@@ -76,9 +91,9 @@ pub enum StatusSelectionError {
 impl From<SelectionError> for StatusSelectionError {
     fn from(error: SelectionError) -> Self {
         match error {
+            SelectionError::NoDefaultProfile => Self::NoAssertionScope,
             SelectionError::UnknownProfiles(names) => Self::UnknownProfiles(names),
             SelectionError::ConflictingSelectors
-            | SelectionError::NoDefaultProfile
             | SelectionError::UnknownChecks(_)
             | SelectionError::UnknownFixers(_) => {
                 unreachable!("status only uses explicit or all-profile selection")

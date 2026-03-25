@@ -189,7 +189,7 @@ fn error_category(error: &StatusError) -> &'static str {
             LoadError::Validation(_) => "validation",
         },
         StatusError::Selection { .. } => "selection",
-        StatusError::GitCommit { .. } => "git",
+        StatusError::GitCheckout { .. } | StatusError::GitCommit { .. } => "git",
         StatusError::Fingerprint { .. } => "fingerprint",
         StatusError::Storage { .. } => "storage",
     }
