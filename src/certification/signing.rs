@@ -5,6 +5,7 @@ use std::process::{Command, Output, Stdio};
 use tempfile::{NamedTempFile, TempDir};
 
 use super::{CertificationBackend, CertificationPayload, SignedCertificationRecord, SigningError};
+use crate::config::TrustedSigner;
 
 /// SSH signature namespace used for authenticated certification records.
 pub const SIGNING_NAMESPACE: &str = "repocert-certification";
@@ -77,20 +78,19 @@ pub fn sign_payload_with_ssh(
 /// Verify an SSH-signed certification record against repo-trusted signer keys.
 pub fn verify_payload_with_ssh(
     record: &SignedCertificationRecord,
-    trusted_signers: &[String],
-    trusted_signer_fingerprints: &[String],
+    trusted_signer: &[TrustedSigner],
 ) -> Result<(), SigningError> {
     validate_signed_record(record)?;
 
-    let Some(index) = trusted_signer_fingerprints
+    let Some(index) = trusted_signer
         .iter()
-        .position(|fingerprint| fingerprint == &record.signer_fingerprint)
+        .position(|signer| signer.fingerprint == record.signer_fingerprint)
     else {
         return Err(SigningError::UntrustedSigner {
             fingerprint: record.signer_fingerprint.clone(),
         });
     };
-    let trusted_signer = &trusted_signers[index];
+    let trusted_signer = &trusted_signer[index].public_key;
 
     let payload_file = NamedTempFile::new().map_err(|source| SigningError::TempFile { source })?;
     let payload_bytes = encode_payload_for_signing(&record.payload);
@@ -267,8 +267,11 @@ mod tests {
 
         let error = verify_payload_with_ssh(
             &signed,
-            std::slice::from_ref(&public_key),
-            std::slice::from_ref(&signed.signer_fingerprint),
+            &[TrustedSigner {
+                name: "test".to_string(),
+                public_key: public_key.clone(),
+                fingerprint: signed.signer_fingerprint.clone(),
+            }],
         )
         .unwrap_err();
 
@@ -287,8 +290,11 @@ mod tests {
         assert_eq!(signed.signer_fingerprint, fingerprint);
         verify_payload_with_ssh(
             &signed,
-            std::slice::from_ref(&public_key),
-            std::slice::from_ref(&fingerprint),
+            &[TrustedSigner {
+                name: "test".to_string(),
+                public_key,
+                fingerprint,
+            }],
         )
         .unwrap();
     }

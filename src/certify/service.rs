@@ -168,10 +168,7 @@ fn execute_profiles(
                 contract_fingerprint: contract_fingerprint.clone(),
             };
             let record = match certification_mode {
-                Some(CertificationMode::SshSigned {
-                    trusted_signers,
-                    trusted_signer_fingerprints,
-                }) => {
+                Some(CertificationMode::SshSigned { trusted_signer }) => {
                     let signed = sign_payload_with_ssh(signing_key, &payload).map_err(|error| {
                         CertifyError::Signing {
                             paths: paths.clone(),
@@ -179,12 +176,13 @@ fn execute_profiles(
                             error,
                         }
                     })?;
-                    verify_payload_with_ssh(&signed, trusted_signers, trusted_signer_fingerprints)
-                        .map_err(|error| CertifyError::Signing {
+                    verify_payload_with_ssh(&signed, trusted_signer).map_err(|error| {
+                        CertifyError::Signing {
                             paths: paths.clone(),
                             signing_key: signing_key.clone(),
                             error,
-                        })?;
+                        }
+                    })?;
                     CertificationRecord::Signed(signed)
                 }
                 None => CertificationRecord::Legacy(payload),

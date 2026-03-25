@@ -335,7 +335,10 @@ default = true
 
 [certification]
 mode = "ssh-signed"
-trusted_signers = ["{public_key}"]
+
+[[certification.trusted_signer]]
+name = "test"
+public_key = "{public_key}"
 
 [[protected_refs]]
 pattern = "refs/heads/*"
@@ -397,7 +400,10 @@ default = true
 
 [certification]
 mode = "ssh-signed"
-trusted_signers = ["{public_key}"]
+
+[[certification.trusted_signer]]
+name = "test"
+public_key = "{public_key}"
 
 [[protected_refs]]
 pattern = "refs/heads/main"

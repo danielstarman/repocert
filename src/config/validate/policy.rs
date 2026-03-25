@@ -5,9 +5,9 @@ use crate::certification::compute_ssh_key_fingerprint;
 use crate::config::error::{ValidationErrorKind, ValidationIssue};
 use crate::config::model::{
     CertificationConfig, CertificationMode, HookMode, HooksConfig, LocalPolicy, ProtectedRef,
-    RepoPath,
+    RepoPath, TrustedSigner,
 };
-use crate::config::raw::{RawCertification, RawConfig, RawHooks, RawLocalPolicy};
+use crate::config::raw::{RawCertification, RawConfig, RawHooks, RawLocalPolicy, RawTrustedSigner};
 use crate::contract::validate_pattern;
 
 use super::common::{issue, normalize_repo_path};
@@ -104,44 +104,48 @@ pub(super) fn validate_certification(
 
     match raw.mode.as_str() {
         "ssh-signed" => {
-            if raw.trusted_signers.is_empty() {
+            if raw.trusted_signer.is_empty() {
                 issues.push(issue(
                     ValidationErrorKind::InvalidCertificationConfig,
-                    "certification.trusted_signers".to_string(),
+                    "certification.trusted_signer".to_string(),
                     "ssh-signed certification mode requires at least one trusted signer"
                         .to_string(),
                 ));
             }
 
-            let mut trusted_signer_fingerprints = Vec::new();
-            for signer in &raw.trusted_signers {
-                if signer.trim().is_empty() {
+            let mut trusted_signer = Vec::new();
+            for signer in &raw.trusted_signer {
+                if signer.name.trim().is_empty() {
                     issues.push(issue(
                         ValidationErrorKind::InvalidCertificationConfig,
-                        "certification.trusted_signers".to_string(),
-                        "trusted signer entries must not be empty".to_string(),
+                        "certification.trusted_signer.name".to_string(),
+                        "trusted signer names must not be empty".to_string(),
+                    ));
+                }
+                if signer.public_key.trim().is_empty() {
+                    issues.push(issue(
+                        ValidationErrorKind::InvalidCertificationConfig,
+                        "certification.trusted_signer.public_key".to_string(),
+                        "trusted signer public keys must not be empty".to_string(),
                     ));
                     continue;
                 }
 
-                let temp_dir = tempfile::TempDir::new().expect("temp dir creation should succeed");
-                let key_path = temp_dir.path().join("trusted_signer.pub");
-                std::fs::write(&key_path, signer).expect("temp signer write should succeed");
-                match compute_ssh_key_fingerprint(&key_path) {
-                    Ok(fingerprint) => trusted_signer_fingerprints.push(fingerprint),
+                match trusted_signer_entry(signer) {
+                    Ok(entry) => trusted_signer.push(entry),
                     Err(_) => issues.push(issue(
                         ValidationErrorKind::InvalidCertificationConfig,
-                        "certification.trusted_signers".to_string(),
-                        format!("trusted signer {signer:?} is not a valid SSH public key"),
+                        "certification.trusted_signer.public_key".to_string(),
+                        format!(
+                            "trusted signer public key for {:?} is not a valid SSH public key",
+                            signer.name
+                        ),
                     )),
                 }
             }
 
             Some(CertificationConfig {
-                mode: CertificationMode::SshSigned {
-                    trusted_signers: raw.trusted_signers.clone(),
-                    trusted_signer_fingerprints,
-                },
+                mode: CertificationMode::SshSigned { trusted_signer },
             })
         }
         other => {
@@ -153,6 +157,18 @@ pub(super) fn validate_certification(
             None
         }
     }
+}
+
+fn trusted_signer_entry(raw: &RawTrustedSigner) -> Result<TrustedSigner, ()> {
+    let temp_dir = tempfile::TempDir::new().map_err(|_| ())?;
+    let key_path = temp_dir.path().join("trusted_signer.pub");
+    std::fs::write(&key_path, &raw.public_key).map_err(|_| ())?;
+    let fingerprint = compute_ssh_key_fingerprint(&key_path).map_err(|_| ())?;
+    Ok(TrustedSigner {
+        name: raw.name.clone(),
+        public_key: raw.public_key.clone(),
+        fingerprint,
+    })
 }
 
 pub(super) fn validate_local_policy(

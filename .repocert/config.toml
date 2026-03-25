@@ -9,6 +9,13 @@ argv = ["cargo", "test"]
 [checks.docs]
 argv = ["sh", "-c", "RUSTDOCFLAGS='-D warnings' cargo doc --no-deps"]
 
+[certification]
+mode = "ssh-signed"
+
+[[certification.trusted_signer]]
+name = "local-repocert"
+public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPLN4rBuL42E/4VY1nbsmYE6zKg6jmxoAklNrbtY0dFX repocert-signing"
+
 [fixers.fmt]
 argv = ["cargo", "fmt"]
 probe_argv = ["cargo", "fmt", "--check"]

@@ -84,22 +84,18 @@ fn authenticate_record(
 
     match (&certification.mode, record) {
         (_, CertificationRecord::Legacy(_)) => Ok(ProfileCertificationState::LegacyUnsigned),
-        (
-            CertificationMode::SshSigned {
-                trusted_signers,
-                trusted_signer_fingerprints,
-            },
-            CertificationRecord::Signed(record),
-        ) => match verify_payload_with_ssh(record, trusted_signers, trusted_signer_fingerprints) {
-            Ok(()) => Ok(ProfileCertificationState::Certified),
-            Err(crate::certification::SigningError::UntrustedSigner { .. }) => {
-                Ok(ProfileCertificationState::UntrustedSigner)
+        (CertificationMode::SshSigned { trusted_signer }, CertificationRecord::Signed(record)) => {
+            match verify_payload_with_ssh(record, trusted_signer) {
+                Ok(()) => Ok(ProfileCertificationState::Certified),
+                Err(crate::certification::SigningError::UntrustedSigner { .. }) => {
+                    Ok(ProfileCertificationState::UntrustedSigner)
+                }
+                Err(crate::certification::SigningError::InvalidSignature { .. }) => {
+                    Ok(ProfileCertificationState::InvalidSignature)
+                }
+                Err(error) => Err(error.into()),
             }
-            Err(crate::certification::SigningError::InvalidSignature { .. }) => {
-                Ok(ProfileCertificationState::InvalidSignature)
-            }
-            Err(error) => Err(error.into()),
-        },
+        }
     }
 }
 
@@ -110,16 +106,11 @@ fn counts_as_certified_elsewhere(
     match certification {
         None => true,
         Some(CertificationConfig {
-            mode:
-                CertificationMode::SshSigned {
-                    trusted_signers,
-                    trusted_signer_fingerprints,
-                },
+            mode: CertificationMode::SshSigned { trusted_signer },
         }) => match record {
             CertificationRecord::Legacy(_) => false,
             CertificationRecord::Signed(record) => {
-                verify_payload_with_ssh(record, trusted_signers, trusted_signer_fingerprints)
-                    .is_ok()
+                verify_payload_with_ssh(record, trusted_signer).is_ok()
             }
         },
     }

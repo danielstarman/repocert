@@ -61,7 +61,14 @@ pub(super) struct RawProtectedRef {
 pub(super) struct RawCertification {
     pub mode: String,
     #[serde(default)]
-    pub trusted_signers: Vec<String>,
+    pub trusted_signer: Vec<RawTrustedSigner>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct RawTrustedSigner {
+    pub name: String,
+    pub public_key: String,
 }
 
 #[derive(Debug, Deserialize)]

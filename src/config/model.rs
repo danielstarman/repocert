@@ -107,15 +107,24 @@ pub struct CertificationConfig {
     pub mode: CertificationMode,
 }
 
+/// One repo-trusted signer entry.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TrustedSigner {
+    /// Human-readable signer label for diagnostics and config readability.
+    pub name: String,
+    /// SSH public key trusted by the repository.
+    pub public_key: String,
+    /// Precomputed SHA-256 fingerprint for the trusted public key.
+    pub fingerprint: String,
+}
+
 /// Supported certification authenticity modes.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CertificationMode {
     /// Require SSH-signed certification records verified against trusted signer keys.
     SshSigned {
-        /// Repo-wide allowlist of trusted SSH public keys.
-        trusted_signers: Vec<String>,
-        /// Precomputed SHA-256 fingerprints for the trusted signer allowlist.
-        trusted_signer_fingerprints: Vec<String>,
+        /// Repo-wide allowlist of trusted signer entries.
+        trusted_signer: Vec<TrustedSigner>,
     },
 }
 

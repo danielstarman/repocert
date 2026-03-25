@@ -357,17 +357,19 @@ schema_version = 1
 
 [certification]
 mode = "ssh-signed"
-trusted_signers = ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJR06amC2Q8j79KKQ4ZHQv6ux8R7L/uL4BlrEGnMHo3l test@example"]
+
+[[certification.trusted_signer]]
+name = "test"
+public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJR06amC2Q8j79KKQ4ZHQv6ux8R7L/uL4BlrEGnMHo3l test@example"
 "#,
     );
 
     let loaded = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap();
 
     match &loaded.contract.certification.as_ref().unwrap().mode {
-        repocert::config::CertificationMode::SshSigned {
-            trusted_signers, ..
-        } => {
-            assert_eq!(trusted_signers.len(), 1);
+        repocert::config::CertificationMode::SshSigned { trusted_signer } => {
+            assert_eq!(trusted_signer.len(), 1);
+            assert_eq!(trusted_signer[0].name, "test");
         }
     }
 }

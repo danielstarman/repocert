@@ -14,5 +14,5 @@ pub use loader::{LoadFailure, LoadOptions, load_contract};
 /// The validated repository contract model.
 pub use model::{
     CertificationConfig, CertificationMode, CommandSpec, Contract, FixerSpec, HookMode,
-    HooksConfig, LoadPaths, LoadedContract, Profile, ProtectedRef, RepoPath,
+    HooksConfig, LoadPaths, LoadedContract, Profile, ProtectedRef, RepoPath, TrustedSigner,
 };
