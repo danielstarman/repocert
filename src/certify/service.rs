@@ -1,7 +1,8 @@
 use crate::certification::{
-    CertificationKey, CertificationRecord, CertificationStore, compute_contract_fingerprint,
+    CertificationKey, CertificationPayload, CertificationRecord, CertificationStore,
+    compute_contract_fingerprint, sign_payload_with_ssh, verify_payload_with_ssh,
 };
-use crate::config::load_contract;
+use crate::config::{CertificationMode, load_contract};
 use crate::contract::{
     EvaluationItemKind, EvaluationItemResult, EvaluationOutcome, build_profile_evaluation_plan,
     progress_label, resolve_profiles, run_evaluation_item,
@@ -19,6 +20,7 @@ pub fn run_certify(options: CertifyOptions) -> Result<CertifyReport, CertifyErro
     let CertifyOptions {
         load_options,
         profiles,
+        signing_key,
         emit_progress,
     } = options;
 
@@ -53,6 +55,19 @@ pub fn run_certify(options: CertifyOptions) -> Result<CertifyReport, CertifyErro
             paths: loaded.paths.clone(),
             error,
         })?;
+    let signing_key = match loaded
+        .contract
+        .certification
+        .as_ref()
+        .map(|config| &config.mode)
+    {
+        Some(CertificationMode::SshSigned { .. }) => {
+            signing_key.ok_or_else(|| CertifyError::MissingSigningKeySelection {
+                paths: loaded.paths.clone(),
+            })?
+        }
+        None => signing_key.unwrap_or_default(),
+    };
     let store = CertificationStore::open(&loaded.paths.repo_root).map_err(|error| {
         CertifyError::Storage {
             paths: loaded.paths.clone(),
@@ -66,6 +81,12 @@ pub fn run_certify(options: CertifyOptions) -> Result<CertifyReport, CertifyErro
         &store,
         &commit,
         &contract_fingerprint,
+        loaded
+            .contract
+            .certification
+            .as_ref()
+            .map(|config| &config.mode),
+        &signing_key,
         &selected_profiles,
         emit_progress,
     )?;
@@ -114,6 +135,8 @@ fn execute_profiles(
     store: &CertificationStore,
     commit: &str,
     contract_fingerprint: &crate::certification::ContractFingerprint,
+    certification_mode: Option<&CertificationMode>,
+    signing_key: &std::path::PathBuf,
     selected_profiles: &[String],
     emit_progress: bool,
 ) -> Result<Vec<CertifyProfileResult>, CertifyError> {
@@ -137,12 +160,34 @@ fn execute_profiles(
 
         let outcome = summarize_profile_outcome(&item_results);
         let record_written = if outcome == CertifyProfileOutcome::Certified {
-            let record = CertificationRecord {
+            let payload = CertificationPayload {
                 key: CertificationKey {
                     commit: commit.to_string(),
                     profile: plan.profile.clone(),
                 },
                 contract_fingerprint: contract_fingerprint.clone(),
+            };
+            let record = match certification_mode {
+                Some(CertificationMode::SshSigned {
+                    trusted_signers,
+                    trusted_signer_fingerprints,
+                }) => {
+                    let signed = sign_payload_with_ssh(signing_key, &payload).map_err(|error| {
+                        CertifyError::Signing {
+                            paths: paths.clone(),
+                            signing_key: signing_key.clone(),
+                            error,
+                        }
+                    })?;
+                    verify_payload_with_ssh(&signed, trusted_signers, trusted_signer_fingerprints)
+                        .map_err(|error| CertifyError::Signing {
+                            paths: paths.clone(),
+                            signing_key: signing_key.clone(),
+                            error,
+                        })?;
+                    CertificationRecord::Signed(signed)
+                }
+                None => CertificationRecord::Legacy(payload),
             };
             store
                 .write(&record)

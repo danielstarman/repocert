@@ -347,6 +347,60 @@ mode = "generated"
 }
 
 #[test]
+fn load_contract_ssh_signed_certification_returns_validated_contract() {
+    let repo = TempDir::new().unwrap();
+    write_repo_file(
+        &repo,
+        ".repocert/config.toml",
+        r#"
+schema_version = 1
+
+[certification]
+mode = "ssh-signed"
+trusted_signers = ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJR06amC2Q8j79KKQ4ZHQv6ux8R7L/uL4BlrEGnMHo3l test@example"]
+"#,
+    );
+
+    let loaded = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap();
+
+    match &loaded.contract.certification.as_ref().unwrap().mode {
+        repocert::config::CertificationMode::SshSigned {
+            trusted_signers, ..
+        } => {
+            assert_eq!(trusted_signers.len(), 1);
+        }
+    }
+}
+
+#[test]
+fn load_contract_ssh_signed_certification_requires_trusted_signers() {
+    let repo = TempDir::new().unwrap();
+    write_repo_file(
+        &repo,
+        ".repocert/config.toml",
+        r#"
+schema_version = 1
+
+[certification]
+mode = "ssh-signed"
+"#,
+    );
+
+    let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
+
+    match error.error {
+        LoadError::Validation(errors) => {
+            assert!(
+                errors
+                    .to_string()
+                    .contains("requires at least one trusted signer")
+            );
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn load_contract_repo_owned_hook_mode_returns_unsupported_mode_error() {
     let repo = TempDir::new().unwrap();
     write_repo_file(

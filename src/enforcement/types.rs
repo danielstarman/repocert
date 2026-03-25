@@ -28,6 +28,12 @@ pub struct MatchedRule {
 pub enum AuthorizeProfileState {
     /// The target commit is certified for the profile.
     Certified,
+    /// A legacy unsigned certification exists, but is not enforcement-trusted.
+    LegacyUnsigned,
+    /// A signed certification exists, but the signer is not trusted by the repo.
+    UntrustedSigner,
+    /// A signed certification exists, but the signature does not verify.
+    InvalidSignature,
     /// A certification exists for the profile, but on a different commit.
     StaleCommit,
     /// A certification exists for the commit/profile, but under a different fingerprint.

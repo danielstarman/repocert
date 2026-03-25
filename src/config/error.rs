@@ -124,6 +124,7 @@ pub enum ValidationErrorKind {
     InvalidCertifyProfile,
     InvalidProtectedPath,
     InvalidProtectedRef,
+    InvalidCertificationConfig,
     InvalidLocalPolicy,
     InvalidHookMode,
 }
@@ -185,6 +186,7 @@ fn kind_label(kind: &ValidationErrorKind) -> &'static str {
         ValidationErrorKind::InvalidCertifyProfile => "invalid_certify_profile",
         ValidationErrorKind::InvalidProtectedPath => "invalid_protected_path",
         ValidationErrorKind::InvalidProtectedRef => "invalid_protected_ref",
+        ValidationErrorKind::InvalidCertificationConfig => "invalid_certification_config",
         ValidationErrorKind::InvalidLocalPolicy => "invalid_local_policy",
         ValidationErrorKind::InvalidHookMode => "invalid_hook_mode",
     }

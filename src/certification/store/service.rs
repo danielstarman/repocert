@@ -36,7 +36,7 @@ impl CertificationStore {
     }
 
     pub fn write(&self, record: &CertificationRecord) -> Result<(), StorageError> {
-        let directory = layout::commit_dir(&self.root_dir, &record.key.commit)?;
+        let directory = layout::commit_dir(&self.root_dir, &record.key().commit)?;
         records::write_record(&directory, record)
     }
 
@@ -46,9 +46,9 @@ impl CertificationStore {
             return Ok(Vec::new());
         }
 
-        let mut records = records::list_commit_records(&directory, commit)?;
-        records.sort_by(|left, right| left.key.profile.cmp(&right.key.profile));
-        Ok(records)
+        let mut entries = records::list_commit_records(&directory, commit)?;
+        entries.sort_by(|left, right| left.key().profile.cmp(&right.key().profile));
+        Ok(entries)
     }
 
     pub fn list_for_profile(
@@ -59,8 +59,8 @@ impl CertificationStore {
             return Ok(Vec::new());
         }
 
-        let mut records = records::list_profile_records(&self.root_dir, profile)?;
-        records.sort_by(|left, right| left.key.commit.cmp(&right.key.commit));
-        Ok(records)
+        let mut entries = records::list_profile_records(&self.root_dir, profile)?;
+        entries.sort_by(|left, right| left.key().commit.cmp(&right.key().commit));
+        Ok(entries)
     }
 }

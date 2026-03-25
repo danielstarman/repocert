@@ -77,11 +77,63 @@ impl<'de> Deserialize<'de> for ContractFingerprint {
 
 /// Stored certification state for one `(commit, profile)` pair.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct CertificationRecord {
+pub struct CertificationPayload {
     /// Commit/profile key this record certifies.
     pub key: CertificationKey,
     /// Contract fingerprint that was current when the certification was written.
     pub contract_fingerprint: ContractFingerprint,
+}
+
+/// Supported authenticated certification backends.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CertificationBackend {
+    /// SSH signature produced and verified via `ssh-keygen -Y`.
+    Ssh,
+}
+
+/// Versioned signed certification envelope stored on disk.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SignedCertificationRecord {
+    /// Envelope version for future format evolution.
+    pub version: u64,
+    /// Signature backend used for this record.
+    pub backend: CertificationBackend,
+    /// Signed certification payload.
+    pub payload: CertificationPayload,
+    /// Fingerprint of the signer public key used to produce the signature.
+    pub signer_fingerprint: String,
+    /// Signature blob as produced by the signing backend.
+    pub signature: String,
+}
+
+/// Certification record read from git-local storage.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CertificationRecord {
+    /// Legacy unsigned certification payload.
+    Legacy(CertificationPayload),
+    /// Authenticated signed certification envelope.
+    Signed(SignedCertificationRecord),
+}
+
+impl CertificationRecord {
+    /// Borrow the logical certification payload regardless of storage format.
+    pub fn payload(&self) -> &CertificationPayload {
+        match self {
+            Self::Legacy(payload) => payload,
+            Self::Signed(record) => &record.payload,
+        }
+    }
+
+    /// Borrow the `(commit, profile)` key for this record.
+    pub fn key(&self) -> &CertificationKey {
+        &self.payload().key
+    }
+
+    /// Borrow the contract fingerprint carried by this record.
+    pub fn contract_fingerprint(&self) -> &ContractFingerprint {
+        &self.payload().contract_fingerprint
+    }
 }
 
 fn hex_encode(bytes: &[u8]) -> String {

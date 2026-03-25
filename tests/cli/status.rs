@@ -1,6 +1,11 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use repocert::certification::{
+    CertificationKey, CertificationPayload, CertificationRecord, CertificationStore,
+    compute_contract_fingerprint,
+};
+use repocert::config::{LoadOptions, load_contract};
 use serde_json::Value;
 use tempfile::TempDir;
 
@@ -17,6 +22,24 @@ fn run_status(args: &[&str], cwd: &Path) -> std::process::Output {
     command.current_dir(cwd);
     command.env_remove("NO_COLOR");
     command.output().unwrap()
+}
+
+fn generate_ssh_signer() -> (TempDir, PathBuf, String) {
+    let dir = TempDir::new().unwrap();
+    let key_path = dir.path().join("signer");
+    let output = Command::new("ssh-keygen")
+        .args(["-q", "-t", "ed25519", "-N", "", "-f"])
+        .arg(&key_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let public_key_path = PathBuf::from(format!("{}.pub", key_path.display()));
+    let public_key = std::fs::read_to_string(&public_key_path).unwrap();
+    (dir, public_key_path, public_key.trim().to_string())
 }
 
 #[test]
@@ -265,9 +288,69 @@ profile = "release"
     assert_eq!(json["protected_refs"][0]["certified"], true);
 }
 
+#[test]
+fn status_signed_mode_surfaces_legacy_unsigned_records_explicitly() {
+    let repo = TempDir::new().unwrap();
+    let (_key_dir, _public_key_path, public_key) = generate_ssh_signer();
+    init_git_repo(&repo);
+    write_repo_file(
+        &repo,
+        ".repocert/config.toml",
+        &format!(
+            r#"
+schema_version = 1
+
+[checks.test]
+argv = ["sh", "-c", "exit 0"]
+
+[profiles.default]
+checks = ["test"]
+certify = true
+default = true
+
+[certification]
+mode = "ssh-signed"
+trusted_signers = ["{public_key}"]
+"#
+        ),
+    );
+    commit_all(&repo, "initial");
+
+    let loaded = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap();
+    let fingerprint = compute_contract_fingerprint(&loaded).unwrap();
+    let commit = head_commit(&repo);
+    let store = CertificationStore::open(repo.path()).unwrap();
+    store
+        .write(&CertificationRecord::Legacy(CertificationPayload {
+            key: CertificationKey {
+                commit,
+                profile: "default".to_string(),
+            },
+            contract_fingerprint: fingerprint,
+        }))
+        .unwrap();
+
+    let output = run_status(&["--format", "json"], repo.path());
+
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["profile_results"][0]["state"], "legacy_unsigned");
+    assert_eq!(json["summary"]["legacy_unsigned"], 1);
+}
+
 fn head_commit_previous(repo: &TempDir) -> String {
     let output = Command::new("git")
         .args(["rev-parse", "HEAD^"])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    String::from_utf8(output.stdout).unwrap().trim().to_string()
+}
+
+fn head_commit(repo: &TempDir) -> String {
+    let output = Command::new("git")
+        .args(["rev-parse", "HEAD"])
         .current_dir(repo.path())
         .output()
         .unwrap();

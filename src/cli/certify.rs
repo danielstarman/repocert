@@ -13,6 +13,9 @@ use super::app::{CertifyArgs, OutputFormat};
 use super::json::{command_error, command_success, execution_result, profile_outcome_result};
 
 pub(super) fn run(args: CertifyArgs) -> ExitCode {
+    let signing_key = args
+        .signing_key
+        .or_else(|| std::env::var_os("REPOCERT_SIGNING_KEY").map(Into::into));
     let options = CertifyOptions {
         load_options: repocert::config::LoadOptions {
             start_dir: None,
@@ -20,6 +23,7 @@ pub(super) fn run(args: CertifyArgs) -> ExitCode {
             config_path: args.config_path,
         },
         profiles: args.profile,
+        signing_key,
         emit_progress: true,
     };
 
@@ -203,6 +207,7 @@ fn error_category(error: &CertifyError) -> &'static str {
         CertifyError::DirtyWorktree { .. } => "worktree",
         CertifyError::GitStatus { .. } | CertifyError::GitCommit { .. } => "git",
         CertifyError::Fingerprint { .. } => "fingerprint",
+        CertifyError::MissingSigningKeySelection { .. } | CertifyError::Signing { .. } => "signing",
         CertifyError::Storage { .. } => "storage",
     }
 }

@@ -13,6 +13,6 @@ pub use error::{
 pub use loader::{LoadFailure, LoadOptions, load_contract};
 /// The validated repository contract model.
 pub use model::{
-    CommandSpec, Contract, FixerSpec, HookMode, HooksConfig, LoadPaths, LoadedContract, Profile,
-    ProtectedRef, RepoPath,
+    CertificationConfig, CertificationMode, CommandSpec, Contract, FixerSpec, HookMode,
+    HooksConfig, LoadPaths, LoadedContract, Profile, ProtectedRef, RepoPath,
 };

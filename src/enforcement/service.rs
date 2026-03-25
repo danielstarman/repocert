@@ -69,15 +69,21 @@ pub fn authorize_ref_update(options: AuthorizeOptions) -> Result<AuthorizeReport
     let profile_results = required_profiles
         .iter()
         .map(|profile| {
-            inspect_profile_certification(&store, &target_commit, profile, &contract_fingerprint)
-                .map(|inspection| AuthorizeProfileResult {
-                    profile: inspection.profile,
-                    state: map_profile_state(inspection.state),
-                })
-                .map_err(|error| AuthorizeError::Storage {
-                    paths: loaded.paths.clone(),
-                    error,
-                })
+            inspect_profile_certification(
+                &store,
+                &target_commit,
+                profile,
+                &contract_fingerprint,
+                loaded.contract.certification.as_ref(),
+            )
+            .map(|inspection| AuthorizeProfileResult {
+                profile: inspection.profile,
+                state: map_profile_state(inspection.state),
+            })
+            .map_err(|error| AuthorizeError::Storage {
+                paths: loaded.paths.clone(),
+                error,
+            })
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -113,6 +119,9 @@ fn dedupe_profiles(matched_rules: &[MatchedRule]) -> Vec<String> {
 fn map_profile_state(state: ProfileCertificationState) -> AuthorizeProfileState {
     match state {
         ProfileCertificationState::Certified => AuthorizeProfileState::Certified,
+        ProfileCertificationState::LegacyUnsigned => AuthorizeProfileState::LegacyUnsigned,
+        ProfileCertificationState::UntrustedSigner => AuthorizeProfileState::UntrustedSigner,
+        ProfileCertificationState::InvalidSignature => AuthorizeProfileState::InvalidSignature,
         ProfileCertificationState::StaleCommit => AuthorizeProfileState::StaleCommit,
         ProfileCertificationState::StaleFingerprint => AuthorizeProfileState::StaleFingerprint,
         ProfileCertificationState::Uncertified => AuthorizeProfileState::Uncertified,

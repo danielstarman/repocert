@@ -67,6 +67,8 @@ pub(super) struct CertifyArgs {
     pub format: OutputFormat,
     #[arg(long = "profile")]
     pub profile: Vec<String>,
+    #[arg(long = "signing-key")]
+    pub signing_key: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]

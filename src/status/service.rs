@@ -57,17 +57,23 @@ pub fn run_status(options: StatusOptions) -> Result<StatusReport, StatusError> {
     let profile_results = selected_profiles
         .iter()
         .map(|profile| {
-            inspect_profile_certification(&store, &commit, profile, &contract_fingerprint)
-                .map(|inspection| StatusProfileResult {
-                    profile: inspection.profile,
-                    state: map_profile_state(&inspection.state),
-                    other_certified_commits: inspection.other_certified_commits,
-                    recorded_fingerprint: inspection.recorded_fingerprint,
-                })
-                .map_err(|error| StatusError::Storage {
-                    paths: loaded.paths.clone(),
-                    error,
-                })
+            inspect_profile_certification(
+                &store,
+                &commit,
+                profile,
+                &contract_fingerprint,
+                loaded.contract.certification.as_ref(),
+            )
+            .map(|inspection| StatusProfileResult {
+                profile: inspection.profile,
+                state: map_profile_state(&inspection.state),
+                other_certified_commits: inspection.other_certified_commits,
+                recorded_fingerprint: inspection.recorded_fingerprint,
+            })
+            .map_err(|error| StatusError::Storage {
+                paths: loaded.paths.clone(),
+                error,
+            })
         })
         .collect::<Result<Vec<_>, _>>()?;
     let protected_refs = loaded
@@ -140,6 +146,9 @@ fn summarize(results: &[StatusProfileResult]) -> StatusSummary {
     let mut summary = StatusSummary {
         total_profiles: results.len(),
         certified: 0,
+        legacy_unsigned: 0,
+        untrusted_signer: 0,
+        invalid_signature: 0,
         stale_commit: 0,
         stale_fingerprint: 0,
         uncertified: 0,
@@ -148,6 +157,9 @@ fn summarize(results: &[StatusProfileResult]) -> StatusSummary {
     for result in results {
         match result.state {
             StatusProfileState::Certified => summary.certified += 1,
+            StatusProfileState::LegacyUnsigned => summary.legacy_unsigned += 1,
+            StatusProfileState::UntrustedSigner => summary.untrusted_signer += 1,
+            StatusProfileState::InvalidSignature => summary.invalid_signature += 1,
             StatusProfileState::StaleCommit => summary.stale_commit += 1,
             StatusProfileState::StaleFingerprint => summary.stale_fingerprint += 1,
             StatusProfileState::Uncertified => summary.uncertified += 1,
@@ -160,6 +172,9 @@ fn summarize(results: &[StatusProfileResult]) -> StatusSummary {
 fn map_profile_state(state: &ProfileCertificationState) -> StatusProfileState {
     match state {
         ProfileCertificationState::Certified => StatusProfileState::Certified,
+        ProfileCertificationState::LegacyUnsigned => StatusProfileState::LegacyUnsigned,
+        ProfileCertificationState::UntrustedSigner => StatusProfileState::UntrustedSigner,
+        ProfileCertificationState::InvalidSignature => StatusProfileState::InvalidSignature,
         ProfileCertificationState::StaleCommit => StatusProfileState::StaleCommit,
         ProfileCertificationState::StaleFingerprint => StatusProfileState::StaleFingerprint,
         ProfileCertificationState::Uncertified => StatusProfileState::Uncertified,

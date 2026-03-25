@@ -1,5 +1,6 @@
 use crate::certification::ContractFingerprint;
 use crate::config::{LoadOptions, LoadPaths};
+use std::path::PathBuf;
 
 /// Options for running `repocert certify`.
 #[derive(Clone, Debug, Default)]
@@ -8,6 +9,8 @@ pub struct CertifyOptions {
     pub load_options: LoadOptions,
     /// Certification-eligible profile names to run.
     pub profiles: Vec<String>,
+    /// Local public-key path used for SSH-backed certification signing.
+    pub signing_key: Option<PathBuf>,
     /// Whether to emit human progress lines during execution.
     pub emit_progress: bool,
 }

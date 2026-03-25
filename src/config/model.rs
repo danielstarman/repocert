@@ -40,6 +40,8 @@ pub struct Contract {
     pub declared_protected_paths: BTreeSet<RepoPath>,
     /// Protected ref rules keyed by glob pattern and required profile.
     pub protected_refs: Vec<ProtectedRef>,
+    /// Optional certification authenticity configuration.
+    pub certification: Option<CertificationConfig>,
     /// Optional local checkout policy enforced by generated commit hooks.
     pub local_policy: Option<LocalPolicy>,
     /// Optional git hook installation configuration.
@@ -96,6 +98,25 @@ pub struct ProtectedRef {
     pub pattern: String,
     /// Certification-eligible profile required for matching refs.
     pub profile: String,
+}
+
+/// Certification authenticity configuration for the repository.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CertificationConfig {
+    /// Selected certification authenticity mode.
+    pub mode: CertificationMode,
+}
+
+/// Supported certification authenticity modes.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CertificationMode {
+    /// Require SSH-signed certification records verified against trusted signer keys.
+    SshSigned {
+        /// Repo-wide allowlist of trusted SSH public keys.
+        trusted_signers: Vec<String>,
+        /// Precomputed SHA-256 fingerprints for the trusted signer allowlist.
+        trusted_signer_fingerprints: Vec<String>,
+    },
 }
 
 /// Local checkout policy enforced by generated commit hooks.

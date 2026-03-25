@@ -16,9 +16,39 @@ pub enum FingerprintError {
 }
 
 #[derive(Debug, Error)]
+pub enum SigningError {
+    #[error("ssh signing key path {path:?} does not exist or is not a file")]
+    MissingSigningKey { path: PathBuf },
+    #[error("signed certification record version {version} is unsupported")]
+    UnsupportedRecordVersion { version: u64 },
+    #[error("failed to create temporary signing files")]
+    TempFile {
+        #[source]
+        source: io::Error,
+    },
+    #[error("failed to run ssh-keygen for signing or verification")]
+    Io {
+        #[source]
+        source: io::Error,
+    },
+    #[error("ssh-keygen failed: {message}")]
+    CommandFailed { message: String },
+    #[error("ssh-keygen output did not contain a SHA256 fingerprint")]
+    MissingFingerprint,
+    #[error("trusted signer public key {index} is invalid")]
+    InvalidTrustedSigner { index: usize },
+    #[error("trusted signer fingerprint {fingerprint} is not allowed by the repository contract")]
+    UntrustedSigner { fingerprint: String },
+    #[error("signature verification failed for signer {fingerprint}")]
+    InvalidSignature { fingerprint: String },
+}
+
+#[derive(Debug, Error)]
 pub enum StorageError {
     #[error(transparent)]
     GitMetadata(#[from] crate::git::GitCommonDirError),
+    #[error(transparent)]
+    Signing(#[from] SigningError),
     #[error("commit id {commit:?} must be non-empty lowercase or uppercase hex")]
     InvalidCommitId { commit: String },
     #[error("failed to read certification record {path:?}")]

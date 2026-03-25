@@ -15,6 +15,30 @@
 //! The crate primarily powers the `repocert` CLI, but its public modules are
 //! available for embedding in other Rust tooling that wants the same contract
 //! model and result types.
+//!
+//! ## Module guide
+//!
+//! - [`config`] discovers, parses, and validates repository contracts.
+//! - [`check`], [`fix`], and [`certify`] run the main contract-driven workflows.
+//! - [`status`] and [`enforcement`] inspect and enforce certification state.
+//! - [`certification`] exposes fingerprinting, storage, and signed-record types.
+//! - [`hooks`] and [`local_policy`] support git hook installation and local
+//!   checkout policy enforcement.
+//!
+//! ## Typical embedded flow
+//!
+//! Most integrations start with a validated contract from [`config::load_contract`],
+//! then call one of the command-style entrypoints:
+//!
+//! - [`check::run_check`]
+//! - [`fix::run_fix`]
+//! - [`certify::run_certify`]
+//! - [`status::run_status`]
+//! - [`enforcement::authorize_ref_update`]
+//!
+//! `repocert` remains CLI-first. Even when embedded as a library, certification
+//! records are stored in git-local metadata and contract semantics are defined by
+//! the repository's `.repocert/config.toml`.
 
 /// Certification storage and contract fingerprinting.
 pub mod certification;

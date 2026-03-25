@@ -1,5 +1,6 @@
 use repocert::certification::{
-    CertificationKey, CertificationRecord, CertificationStore, ContractFingerprint, StorageError,
+    CertificationKey, CertificationPayload, CertificationRecord, CertificationStore,
+    ContractFingerprint, StorageError,
 };
 use std::fs;
 use tempfile::TempDir;
@@ -58,17 +59,17 @@ fn certification_store_write_then_read_returns_record() {
     let repo = TempDir::new().unwrap();
     init_git_repo(&repo);
     let store = CertificationStore::open(repo.path()).unwrap();
-    let record = CertificationRecord {
+    let record = CertificationRecord::Legacy(CertificationPayload {
         key: CertificationKey {
             commit: "abc123".to_string(),
             profile: "default".to_string(),
         },
         contract_fingerprint: fingerprint(1),
-    };
+    });
 
     // Act
     store.write(&record).unwrap();
-    let loaded = store.read(&record.key).unwrap();
+    let loaded = store.read(record.key()).unwrap();
 
     // Assert
     assert_eq!(loaded, Some(record));
@@ -84,14 +85,14 @@ fn certification_store_write_same_key_twice_updates_record() {
         commit: "abc123".to_string(),
         profile: "default".to_string(),
     };
-    let first = CertificationRecord {
+    let first = CertificationRecord::Legacy(CertificationPayload {
         key: key.clone(),
         contract_fingerprint: fingerprint(1),
-    };
-    let second = CertificationRecord {
+    });
+    let second = CertificationRecord::Legacy(CertificationPayload {
         key: key.clone(),
         contract_fingerprint: fingerprint(2),
-    };
+    });
 
     // Act
     store.write(&first).unwrap();
@@ -109,20 +110,20 @@ fn certification_store_list_for_commit_returns_profiles_in_deterministic_order()
     init_git_repo(&repo);
     let store = CertificationStore::open(repo.path()).unwrap();
     let commit = "abc123";
-    let beta = CertificationRecord {
+    let beta = CertificationRecord::Legacy(CertificationPayload {
         key: CertificationKey {
             commit: commit.to_string(),
             profile: "beta".to_string(),
         },
         contract_fingerprint: fingerprint(1),
-    };
-    let alpha = CertificationRecord {
+    });
+    let alpha = CertificationRecord::Legacy(CertificationPayload {
         key: CertificationKey {
             commit: commit.to_string(),
             profile: "alpha:fmt".to_string(),
         },
         contract_fingerprint: fingerprint(2),
-    };
+    });
 
     // Act
     store.write(&beta).unwrap();
@@ -133,7 +134,7 @@ fn certification_store_list_for_commit_returns_profiles_in_deterministic_order()
     assert_eq!(
         listed
             .into_iter()
-            .map(|record| record.key.profile)
+            .map(|record| record.key().profile.clone())
             .collect::<Vec<_>>(),
         vec!["alpha:fmt".to_string(), "beta".to_string()]
     );
@@ -145,13 +146,13 @@ fn certification_store_invalid_commit_id_returns_error() {
     let repo = TempDir::new().unwrap();
     init_git_repo(&repo);
     let store = CertificationStore::open(repo.path()).unwrap();
-    let record = CertificationRecord {
+    let record = CertificationRecord::Legacy(CertificationPayload {
         key: CertificationKey {
             commit: "refs/heads/main".to_string(),
             profile: "default".to_string(),
         },
         contract_fingerprint: fingerprint(1),
-    };
+    });
 
     // Act
     let error = store.write(&record).unwrap_err();
@@ -173,16 +174,20 @@ fn certification_store_read_mismatched_record_key_returns_error() {
         commit: "abc123".to_string(),
         profile: "default".to_string(),
     };
-    let wrong = CertificationRecord {
+    let wrong = CertificationRecord::Legacy(CertificationPayload {
         key: CertificationKey {
             commit: "abc123".to_string(),
             profile: "other".to_string(),
         },
         contract_fingerprint: fingerprint(7),
-    };
+    });
     let path = store.root_dir().join("abc123").join("64656661756c74.json");
     fs::create_dir_all(path.parent().unwrap()).unwrap();
-    fs::write(path, serde_json::to_vec_pretty(&wrong).unwrap()).unwrap();
+    let serialized = match &wrong {
+        CertificationRecord::Legacy(payload) => serde_json::to_vec_pretty(payload).unwrap(),
+        CertificationRecord::Signed(_) => unreachable!("test only writes legacy records"),
+    };
+    fs::write(path, serialized).unwrap();
 
     // Act
     let error = store.read(&key).unwrap_err();

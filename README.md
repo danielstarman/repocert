@@ -10,10 +10,12 @@ on protected branches. The contract lives in the repo and travels with the code.
 
 CI catches problems after the push. repocert catches them before.
 
-A certification is a cryptographic record binding a specific commit to a
-specific profile under a specific contract. If the contract changes, existing
-certifications become stale. You cannot certify under weak rules and push
-under strong ones.
+A certification is a local certification record binding a specific commit to a
+specific profile under a specific contract fingerprint. Repositories may also
+require SSH-signed certifications, so protected ref enforcement can trust only
+records signed by repo-trusted signer keys. If the contract changes, existing
+certifications become stale. You cannot certify under weak rules and push under
+strong ones.
 
 ## Quick start
 
@@ -88,8 +90,9 @@ source of truth for what "acceptable" means in this repository.
 **Profile.** A named set of checks and fixers. A repository can have multiple
 profiles (e.g., `lint`, `full`, `release`) with different strictness levels.
 
-**Certification.** A record that a specific commit passed all checks in a
-profile, stamped with a fingerprint of the contract that was in effect.
+**Certification.** A local record that a specific commit passed all checks in a
+profile, stamped with the contract fingerprint that was in effect.
+Repositories may additionally require SSH-signed certifications for enforcement.
 Certifications are stored locally in `.git`.
 
 **Contract fingerprint.** A SHA-256 hash of the contract and its protected
@@ -99,7 +102,9 @@ between certification and push.
 
 **Enforcement.** The `authorize` command checks whether a ref update (push)
 targets a protected ref, and if so, whether the target commit is certified
-under the required profile with a current contract fingerprint.
+under the required profile with a current contract fingerprint. When SSH-signed
+certification is enabled, enforcement trusts only valid signed certification
+records from repo-trusted signer keys.
 
 **Local policy.** Optional rules enforced during development, such as
 preventing direct commits to protected branches or requiring a clean

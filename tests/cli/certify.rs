@@ -1,7 +1,7 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use repocert::certification::{CertificationKey, CertificationStore};
+use repocert::certification::{CertificationKey, CertificationRecord, CertificationStore};
 use serde_json::Value;
 use tempfile::TempDir;
 
@@ -28,6 +28,24 @@ fn head_commit(repo: &TempDir) -> String {
         .unwrap();
     assert!(output.status.success());
     String::from_utf8(output.stdout).unwrap().trim().to_string()
+}
+
+fn generate_ssh_signer() -> (TempDir, PathBuf, String) {
+    let dir = TempDir::new().unwrap();
+    let key_path = dir.path().join("signer");
+    let output = Command::new("ssh-keygen")
+        .args(["-q", "-t", "ed25519", "-N", "", "-f"])
+        .arg(&key_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let public_key_path = PathBuf::from(format!("{}.pub", key_path.display()));
+    let public_key = std::fs::read_to_string(&public_key_path).unwrap();
+    (dir, public_key_path, public_key.trim().to_string())
 }
 
 #[test]
@@ -272,4 +290,95 @@ certify = true
         .unwrap();
     assert!(first.is_none());
     assert!(second.is_some());
+}
+
+#[test]
+fn certify_ssh_signed_mode_requires_signing_key_selection() {
+    let repo = TempDir::new().unwrap();
+    let (_key_dir, _public_key_path, public_key) = generate_ssh_signer();
+    init_git_repo(&repo);
+    write_repo_file(
+        &repo,
+        ".repocert/config.toml",
+        &format!(
+            r#"
+schema_version = 1
+
+[checks.test]
+argv = ["sh", "-c", "exit 0"]
+
+[profiles.default]
+checks = ["test"]
+certify = true
+default = true
+
+[certification]
+mode = "ssh-signed"
+trusted_signers = ["{public_key}"]
+"#
+        ),
+    );
+    commit_all(&repo, "initial");
+
+    let output = run_certify(&["--format", "json"], repo.path());
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["error"]["category"], "signing");
+    assert!(
+        json["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("requires a local signing key")
+    );
+}
+
+#[test]
+fn certify_ssh_signed_mode_writes_signed_record() {
+    let repo = TempDir::new().unwrap();
+    let (_key_dir, public_key_path, public_key) = generate_ssh_signer();
+    init_git_repo(&repo);
+    write_repo_file(
+        &repo,
+        ".repocert/config.toml",
+        &format!(
+            r#"
+schema_version = 1
+
+[checks.test]
+argv = ["sh", "-c", "exit 0"]
+
+[profiles.default]
+checks = ["test"]
+certify = true
+default = true
+
+[certification]
+mode = "ssh-signed"
+trusted_signers = ["{public_key}"]
+"#
+        ),
+    );
+    commit_all(&repo, "initial");
+
+    let output = run_certify(
+        &[
+            "--format",
+            "json",
+            "--signing-key",
+            public_key_path.to_str().unwrap(),
+        ],
+        repo.path(),
+    );
+
+    assert!(output.status.success());
+    let commit = head_commit(&repo);
+    let store = CertificationStore::open(repo.path()).unwrap();
+    let record = store
+        .read(&CertificationKey {
+            commit,
+            profile: "default".to_string(),
+        })
+        .unwrap();
+    assert!(matches!(record, Some(CertificationRecord::Signed(_))));
 }

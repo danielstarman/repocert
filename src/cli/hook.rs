@@ -261,6 +261,9 @@ fn authorize_error_category(error: &AuthorizeError) -> &'static str {
 fn authorize_state_label(state: &repocert::enforcement::AuthorizeProfileState) -> &'static str {
     match state {
         repocert::enforcement::AuthorizeProfileState::Certified => "certified",
+        repocert::enforcement::AuthorizeProfileState::LegacyUnsigned => "legacy_unsigned",
+        repocert::enforcement::AuthorizeProfileState::UntrustedSigner => "untrusted_signer",
+        repocert::enforcement::AuthorizeProfileState::InvalidSignature => "invalid_signature",
         repocert::enforcement::AuthorizeProfileState::StaleCommit => "stale_commit",
         repocert::enforcement::AuthorizeProfileState::StaleFingerprint => "stale_fingerprint",
         repocert::enforcement::AuthorizeProfileState::Uncertified => "uncertified",

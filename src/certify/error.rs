@@ -1,6 +1,8 @@
 use thiserror::Error;
 
-use crate::certification::{FingerprintError, StorageError};
+use std::path::PathBuf;
+
+use crate::certification::{FingerprintError, SigningError, StorageError};
 use crate::config::{LoadFailure, LoadPaths};
 use crate::contract::SelectionError;
 use crate::git::{GitCommitError, GitWorktreeError};
@@ -38,6 +40,17 @@ pub enum CertifyError {
         #[source]
         error: FingerprintError,
     },
+    #[error(
+        "authenticated certification requires a local signing key; pass --signing-key or set REPOCERT_SIGNING_KEY"
+    )]
+    MissingSigningKeySelection { paths: LoadPaths },
+    #[error("{error}")]
+    Signing {
+        paths: LoadPaths,
+        signing_key: PathBuf,
+        #[source]
+        error: SigningError,
+    },
     #[error("{error}")]
     Storage {
         paths: LoadPaths,
@@ -55,6 +68,8 @@ impl CertifyError {
             | Self::GitStatus { paths, .. }
             | Self::GitCommit { paths, .. }
             | Self::Fingerprint { paths, .. }
+            | Self::MissingSigningKeySelection { paths }
+            | Self::Signing { paths, .. }
             | Self::Storage { paths, .. } => Some(paths),
         }
     }

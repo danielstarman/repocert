@@ -15,6 +15,7 @@ pub(super) struct RawConfig {
     pub protected_paths: Vec<String>,
     #[serde(default)]
     pub protected_refs: Vec<RawProtectedRef>,
+    pub certification: Option<RawCertification>,
     pub local_policy: Option<RawLocalPolicy>,
     pub hooks: Option<RawHooks>,
 }
@@ -53,6 +54,14 @@ pub(super) struct RawProfile {
 pub(super) struct RawProtectedRef {
     pub pattern: String,
     pub profile: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct RawCertification {
+    pub mode: String,
+    #[serde(default)]
+    pub trusted_signers: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]

@@ -1,8 +1,16 @@
-use super::{CertificationKey, CertificationStore, ContractFingerprint, StorageError};
+use crate::config::{CertificationConfig, CertificationMode};
+
+use super::{
+    CertificationKey, CertificationRecord, CertificationStore, ContractFingerprint, StorageError,
+    verify_payload_with_ssh,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ProfileCertificationState {
     Certified,
+    LegacyUnsigned,
+    UntrustedSigner,
+    InvalidSignature,
     StaleCommit,
     StaleFingerprint,
     Uncertified,
@@ -21,14 +29,15 @@ pub(crate) fn inspect_profile_certification(
     commit: &str,
     profile: &str,
     current_fingerprint: &ContractFingerprint,
+    certification: Option<&CertificationConfig>,
 ) -> Result<ProfileCertificationInspection, StorageError> {
     let key = CertificationKey {
         commit: commit.to_string(),
         profile: profile.to_string(),
     };
     if let Some(record) = store.read(&key)? {
-        let state = if record.contract_fingerprint == *current_fingerprint {
-            ProfileCertificationState::Certified
+        let state = if record.contract_fingerprint() == current_fingerprint {
+            authenticate_record(&record, certification)?
         } else {
             ProfileCertificationState::StaleFingerprint
         };
@@ -36,14 +45,15 @@ pub(crate) fn inspect_profile_certification(
             profile: profile.to_string(),
             state,
             other_certified_commits: Vec::new(),
-            recorded_fingerprint: Some(record.contract_fingerprint),
+            recorded_fingerprint: Some(record.contract_fingerprint().clone()),
         });
     }
 
     let mut other_commits = store
         .list_for_profile(profile)?
         .into_iter()
-        .map(|record| record.key.commit)
+        .filter(|record| counts_as_certified_elsewhere(record, certification))
+        .map(|record| record.key().commit.clone())
         .collect::<Vec<_>>();
     other_commits.retain(|other_commit| other_commit != commit);
 
@@ -61,5 +71,56 @@ pub(crate) fn inspect_profile_certification(
             other_certified_commits: other_commits,
             recorded_fingerprint: None,
         })
+    }
+}
+
+fn authenticate_record(
+    record: &CertificationRecord,
+    certification: Option<&CertificationConfig>,
+) -> Result<ProfileCertificationState, StorageError> {
+    let Some(certification) = certification else {
+        return Ok(ProfileCertificationState::Certified);
+    };
+
+    match (&certification.mode, record) {
+        (_, CertificationRecord::Legacy(_)) => Ok(ProfileCertificationState::LegacyUnsigned),
+        (
+            CertificationMode::SshSigned {
+                trusted_signers,
+                trusted_signer_fingerprints,
+            },
+            CertificationRecord::Signed(record),
+        ) => match verify_payload_with_ssh(record, trusted_signers, trusted_signer_fingerprints) {
+            Ok(()) => Ok(ProfileCertificationState::Certified),
+            Err(crate::certification::SigningError::UntrustedSigner { .. }) => {
+                Ok(ProfileCertificationState::UntrustedSigner)
+            }
+            Err(crate::certification::SigningError::InvalidSignature { .. }) => {
+                Ok(ProfileCertificationState::InvalidSignature)
+            }
+            Err(error) => Err(error.into()),
+        },
+    }
+}
+
+fn counts_as_certified_elsewhere(
+    record: &CertificationRecord,
+    certification: Option<&CertificationConfig>,
+) -> bool {
+    match certification {
+        None => true,
+        Some(CertificationConfig {
+            mode:
+                CertificationMode::SshSigned {
+                    trusted_signers,
+                    trusted_signer_fingerprints,
+                },
+        }) => match record {
+            CertificationRecord::Legacy(_) => false,
+            CertificationRecord::Signed(record) => {
+                verify_payload_with_ssh(record, trusted_signers, trusted_signer_fingerprints)
+                    .is_ok()
+            }
+        },
     }
 }
