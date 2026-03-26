@@ -1,8 +1,10 @@
 use repocert::certification::{
     CertificationKey, CertificationPayload, CertificationRecord, CertificationStore,
-    ContractFingerprint, StorageError,
+    ContractFingerprint, StorageError, sign_payload_with_ssh,
 };
 use std::fs;
+use std::path::PathBuf;
+use std::process::Command;
 use tempfile::TempDir;
 
 use crate::{commit_all, init_git_repo, run_git, write_repo_file};
@@ -59,13 +61,7 @@ fn certification_store_write_then_read_returns_record() {
     let repo = TempDir::new().unwrap();
     init_git_repo(&repo);
     let store = CertificationStore::open(repo.path()).unwrap();
-    let record = CertificationRecord::Legacy(CertificationPayload {
-        key: CertificationKey {
-            commit: "abc123".to_string(),
-            profile: "default".to_string(),
-        },
-        contract_fingerprint: fingerprint(1),
-    });
+    let record = signed_record("abc123", "default", 1);
 
     // Act
     store.write(&record).unwrap();
@@ -85,14 +81,8 @@ fn certification_store_write_same_key_twice_updates_record() {
         commit: "abc123".to_string(),
         profile: "default".to_string(),
     };
-    let first = CertificationRecord::Legacy(CertificationPayload {
-        key: key.clone(),
-        contract_fingerprint: fingerprint(1),
-    });
-    let second = CertificationRecord::Legacy(CertificationPayload {
-        key: key.clone(),
-        contract_fingerprint: fingerprint(2),
-    });
+    let first = signed_record(&key.commit, &key.profile, 1);
+    let second = signed_record(&key.commit, &key.profile, 2);
 
     // Act
     store.write(&first).unwrap();
@@ -110,20 +100,8 @@ fn certification_store_list_for_commit_returns_profiles_in_deterministic_order()
     init_git_repo(&repo);
     let store = CertificationStore::open(repo.path()).unwrap();
     let commit = "abc123";
-    let beta = CertificationRecord::Legacy(CertificationPayload {
-        key: CertificationKey {
-            commit: commit.to_string(),
-            profile: "beta".to_string(),
-        },
-        contract_fingerprint: fingerprint(1),
-    });
-    let alpha = CertificationRecord::Legacy(CertificationPayload {
-        key: CertificationKey {
-            commit: commit.to_string(),
-            profile: "alpha:fmt".to_string(),
-        },
-        contract_fingerprint: fingerprint(2),
-    });
+    let beta = signed_record(commit, "beta", 1);
+    let alpha = signed_record(commit, "alpha:fmt", 2);
 
     // Act
     store.write(&beta).unwrap();
@@ -146,13 +124,7 @@ fn certification_store_invalid_commit_id_returns_error() {
     let repo = TempDir::new().unwrap();
     init_git_repo(&repo);
     let store = CertificationStore::open(repo.path()).unwrap();
-    let record = CertificationRecord::Legacy(CertificationPayload {
-        key: CertificationKey {
-            commit: "refs/heads/main".to_string(),
-            profile: "default".to_string(),
-        },
-        contract_fingerprint: fingerprint(1),
-    });
+    let record = signed_record("refs/heads/main", "default", 1);
 
     // Act
     let error = store.write(&record).unwrap_err();
@@ -174,20 +146,10 @@ fn certification_store_read_mismatched_record_key_returns_error() {
         commit: "abc123".to_string(),
         profile: "default".to_string(),
     };
-    let wrong = CertificationRecord::Legacy(CertificationPayload {
-        key: CertificationKey {
-            commit: "abc123".to_string(),
-            profile: "other".to_string(),
-        },
-        contract_fingerprint: fingerprint(7),
-    });
+    let wrong = signed_record("abc123", "other", 7);
     let path = store.root_dir().join("abc123").join("64656661756c74.json");
     fs::create_dir_all(path.parent().unwrap()).unwrap();
-    let serialized = match &wrong {
-        CertificationRecord::Legacy(payload) => serde_json::to_vec_pretty(payload).unwrap(),
-        CertificationRecord::Signed(_) => unreachable!("test only writes legacy records"),
-    };
-    fs::write(path, serialized).unwrap();
+    fs::write(path, serde_json::to_vec_pretty(&wrong).unwrap()).unwrap();
 
     // Act
     let error = store.read(&key).unwrap_err();
@@ -199,6 +161,68 @@ fn certification_store_read_mismatched_record_key_returns_error() {
     }
 }
 
+#[test]
+fn certification_store_read_legacy_payload_returns_json_error() {
+    let repo = TempDir::new().unwrap();
+    init_git_repo(&repo);
+    let store = CertificationStore::open(repo.path()).unwrap();
+    let key = CertificationKey {
+        commit: "abc123".to_string(),
+        profile: "default".to_string(),
+    };
+    let path = store.root_dir().join("abc123").join("64656661756c74.json");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(
+        path,
+        serde_json::to_vec_pretty(&CertificationPayload {
+            key: key.clone(),
+            contract_fingerprint: fingerprint(7),
+        })
+        .unwrap(),
+    )
+    .unwrap();
+
+    let error = store.read(&key).unwrap_err();
+
+    match error {
+        StorageError::Json { .. } => {}
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
 fn fingerprint(fill: u8) -> ContractFingerprint {
     ContractFingerprint::from_bytes([fill; 32])
+}
+
+fn signed_record(commit: &str, profile: &str, fingerprint_fill: u8) -> CertificationRecord {
+    let (_dir, key_path, _public_key) = generate_ssh_signer();
+    sign_payload_with_ssh(
+        &key_path,
+        &CertificationPayload {
+            key: CertificationKey {
+                commit: commit.to_string(),
+                profile: profile.to_string(),
+            },
+            contract_fingerprint: fingerprint(fingerprint_fill),
+        },
+    )
+    .unwrap()
+}
+
+fn generate_ssh_signer() -> (TempDir, PathBuf, String) {
+    let dir = TempDir::new().unwrap();
+    let key_path = dir.path().join("signer");
+    let output = Command::new("ssh-keygen")
+        .args(["-q", "-t", "ed25519", "-N", "", "-f"])
+        .arg(&key_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let public_key_path = PathBuf::from(format!("{}.pub", key_path.display()));
+    let public_key = std::fs::read_to_string(&public_key_path).unwrap();
+    (dir, key_path, public_key.trim().to_string())
 }

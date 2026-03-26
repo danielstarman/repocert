@@ -50,7 +50,8 @@ pub(super) fn validate(raw: RawConfig, repo_root: &Path) -> Result<Contract, Loa
     let declared_protected_paths =
         validate_protected_paths(&raw.protected_paths, repo_root, &mut issues);
     let protected_refs = validate_protected_refs(&raw, &mut issues);
-    let certification = validate_certification(raw.certification.as_ref(), &mut issues);
+    let certification =
+        validate_certification(raw.certification.as_ref(), &raw.profiles, &mut issues);
     let local_policy = validate_local_policy(raw.local_policy.as_ref(), &mut issues);
     let hooks = validate_hooks(
         raw.hooks.as_ref(),

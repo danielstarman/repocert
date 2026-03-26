@@ -18,7 +18,7 @@ pub use store::CertificationStore;
 /// Core certification key, record, and fingerprint types.
 pub use types::{
     CertificationBackend, CertificationKey, CertificationPayload, CertificationRecord,
-    ContractFingerprint, SignedCertificationRecord,
+    ContractFingerprint,
 };
 
 pub(crate) use state::{ProfileCertificationState, inspect_profile_certification};

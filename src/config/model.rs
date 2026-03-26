@@ -40,7 +40,7 @@ pub struct Contract {
     pub declared_protected_paths: BTreeSet<RepoPath>,
     /// Protected ref rules keyed by glob pattern and required profile.
     pub protected_refs: Vec<ProtectedRef>,
-    /// Optional certification authenticity configuration.
+    /// Optional certification signing configuration.
     pub certification: Option<CertificationConfig>,
     /// Optional local checkout policy enforced by generated commit hooks.
     pub local_policy: Option<LocalPolicy>,

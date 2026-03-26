@@ -5,10 +5,7 @@ use std::path::Path;
 
 use tempfile::NamedTempFile;
 
-use crate::certification::{
-    CertificationKey, CertificationPayload, CertificationRecord, SignedCertificationRecord,
-    StorageError,
-};
+use crate::certification::{CertificationKey, CertificationRecord, StorageError};
 
 use super::layout;
 
@@ -143,23 +140,12 @@ pub(super) fn list_profile_records(
 }
 
 fn parse_record(path: &Path, bytes: &[u8]) -> Result<CertificationRecord, StorageError> {
-    if let Ok(record) = serde_json::from_slice::<SignedCertificationRecord>(bytes) {
-        return Ok(CertificationRecord::Signed(record));
-    }
-
-    let payload: CertificationPayload =
-        serde_json::from_slice(bytes).map_err(|source| StorageError::Json {
-            path: path.to_path_buf(),
-            source,
-        })?;
-    Ok(CertificationRecord::Legacy(payload))
+    serde_json::from_slice(bytes).map_err(|source| StorageError::Json {
+        path: path.to_path_buf(),
+        source,
+    })
 }
 
 fn serialize_record(record: &CertificationRecord) -> Vec<u8> {
-    match record {
-        CertificationRecord::Legacy(payload) => serde_json::to_vec_pretty(payload)
-            .expect("legacy certification records should serialize"),
-        CertificationRecord::Signed(record) => serde_json::to_vec_pretty(record)
-            .expect("signed certification records should serialize"),
-    }
+    serde_json::to_vec_pretty(record).expect("certification records should serialize")
 }

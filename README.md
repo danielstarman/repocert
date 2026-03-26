@@ -11,8 +11,8 @@ on protected branches. The contract lives in the repo and travels with the code.
 CI catches problems after the push. repocert catches them before.
 
 A certification is a local certification record binding a specific commit to a
-specific profile under a specific contract fingerprint. Repositories may also
-require SSH-signed certifications, so protected ref enforcement can trust only
+specific profile under a specific contract fingerprint. Certifications are
+SSH-signed, so protected ref enforcement can trust only
 records signed by repo-trusted signer keys. If the contract changes, existing
 certifications become stale. You cannot certify under weak rules and push under
 strong ones.
@@ -40,6 +40,13 @@ fixers = ["fmt"]
 certify = true
 default = true
 
+[certification]
+mode = "ssh-signed"
+
+[[certification.trusted_signer]]
+name = "local-repocert"
+public_key = "ssh-ed25519 AAAA... your-public-key"
+
 [[protected_refs]]
 pattern = "refs/heads/main"
 profile = "default"
@@ -53,7 +60,7 @@ Then:
 ```sh
 repocert check                      # run checks against the contract
 repocert fix                        # run fixers to repair what they can
-repocert certify                    # certify HEAD if all checks pass
+repocert certify --signing-key ~/.ssh/repocert-signing
 repocert status --assert-certified  # verify certification exists
 repocert install-hooks              # wire enforcement into git hooks
 ```
@@ -92,8 +99,7 @@ profiles (e.g., `lint`, `full`, `release`) with different strictness levels.
 
 **Certification.** A local record that a specific commit passed all checks in a
 profile, stamped with the contract fingerprint that was in effect.
-Repositories may additionally require SSH-signed certifications for enforcement.
-Certifications are stored locally in `.git`.
+Certifications are SSH-signed and stored locally in `.git`.
 
 **Contract fingerprint.** A SHA-256 hash of the contract and its protected
 files. If the contract changes, the fingerprint changes, and existing
@@ -102,9 +108,8 @@ between certification and push.
 
 **Enforcement.** The `authorize` command checks whether a ref update (push)
 targets a protected ref, and if so, whether the target commit is certified
-under the required profile with a current contract fingerprint. When SSH-signed
-certification is enabled, enforcement trusts only valid signed certification
-records from repo-trusted signer keys.
+under the required profile with a current contract fingerprint. Enforcement
+trusts only valid signed certification records from repo-trusted signer keys.
 
 **Local policy.** Optional rules enforced during development, such as
 preventing direct commits to protected branches or requiring a clean

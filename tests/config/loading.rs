@@ -8,6 +8,22 @@ use std::os::unix::fs as unix_fs;
 
 use crate::write_repo_file;
 
+const TEST_PUBLIC_KEY: &str =
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJR06amC2Q8j79KKQ4ZHQv6ux8R7L/uL4BlrEGnMHo3l test@example";
+
+fn certification_block() -> String {
+    format!(
+        r#"
+[certification]
+mode = "ssh-signed"
+
+[[certification.trusted_signer]]
+name = "test"
+public_key = "{TEST_PUBLIC_KEY}"
+"#
+    )
+}
+
 #[test]
 fn load_contract_discovered_config_returns_validated_contract() {
     // Arrange
@@ -15,7 +31,8 @@ fn load_contract_discovered_config_returns_validated_contract() {
     write_repo_file(
         &repo,
         ".repocert/config.toml",
-        r#"
+        &format!(
+            r#"
 schema_version = 1
 protected_paths = ["docs/spec.md", "./README.md"]
 
@@ -46,7 +63,10 @@ profile = "release"
 
 [hooks]
 mode = "generated"
+{}
 "#,
+            certification_block()
+        ),
     );
     std::fs::create_dir_all(repo.path().join("nested/work")).unwrap();
 
@@ -198,7 +218,8 @@ fn load_contract_profile_include_cycle_returns_validation_error() {
     write_repo_file(
         &repo,
         ".repocert/config.toml",
-        r#"
+        &format!(
+            r#"
 schema_version = 1
 
 [checks.test]
@@ -211,7 +232,10 @@ certify = true
 [profiles.b]
 includes = ["a"]
 checks = ["test"]
+{}
 "#,
+            certification_block()
+        ),
     );
 
     // Act
@@ -233,7 +257,8 @@ fn load_contract_profile_fixer_without_probe_returns_validation_error() {
     write_repo_file(
         &repo,
         ".repocert/config.toml",
-        r#"
+        &format!(
+            r#"
 schema_version = 1
 
 [checks.test]
@@ -246,7 +271,10 @@ argv = ["cargo", "fmt"]
 checks = ["test"]
 fixers = ["fmt"]
 certify = true
+{}
 "#,
+            certification_block()
+        ),
     );
 
     // Act
@@ -396,6 +424,38 @@ mode = "ssh-signed"
                 errors
                     .to_string()
                     .contains("requires at least one trusted signer")
+            );
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
+fn load_contract_certifiable_profile_requires_certification_config() {
+    let repo = TempDir::new().unwrap();
+    write_repo_file(
+        &repo,
+        ".repocert/config.toml",
+        r#"
+schema_version = 1
+
+[checks.test]
+argv = ["cargo", "test"]
+
+[profiles.release]
+checks = ["test"]
+certify = true
+"#,
+    );
+
+    let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
+
+    match error.error {
+        LoadError::Validation(errors) => {
+            assert!(
+                errors
+                    .to_string()
+                    .contains("certification-eligible profiles require [certification]")
             );
         }
         other => panic!("unexpected error: {other:?}"),

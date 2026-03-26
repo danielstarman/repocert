@@ -46,6 +46,7 @@ pub fn authorize_ref_update(options: AuthorizeOptions) -> Result<AuthorizeReport
             error,
         }
     })?;
+    let certification = loaded.contract.certification.as_ref();
 
     let matched_rules = loaded
         .contract
@@ -69,12 +70,15 @@ pub fn authorize_ref_update(options: AuthorizeOptions) -> Result<AuthorizeReport
     let profile_results = required_profiles
         .iter()
         .map(|profile| {
+            let certification = certification
+                .as_ref()
+                .expect("certification-eligible profiles require certification config");
             inspect_profile_certification(
                 &store,
                 &target_commit,
                 profile,
                 &contract_fingerprint,
-                loaded.contract.certification.as_ref(),
+                certification,
             )
             .map(|inspection| AuthorizeProfileResult {
                 profile: inspection.profile,
@@ -120,7 +124,6 @@ fn dedupe_profiles(matched_rules: &[MatchedRule]) -> Vec<String> {
 fn map_profile_state(state: ProfileCertificationState) -> AuthorizeProfileState {
     match state {
         ProfileCertificationState::Certified => AuthorizeProfileState::Certified,
-        ProfileCertificationState::LegacyUnsigned => AuthorizeProfileState::LegacyUnsigned,
         ProfileCertificationState::UntrustedSigner => AuthorizeProfileState::UntrustedSigner,
         ProfileCertificationState::InvalidSignature => AuthorizeProfileState::InvalidSignature,
         ProfileCertificationState::StaleCommit => AuthorizeProfileState::StaleCommit,

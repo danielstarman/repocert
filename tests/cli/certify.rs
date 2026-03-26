@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use repocert::certification::{CertificationKey, CertificationRecord, CertificationStore};
+use repocert::certification::{CertificationKey, CertificationStore};
 use serde_json::Value;
 use tempfile::TempDir;
 
@@ -48,15 +48,30 @@ fn generate_ssh_signer() -> (TempDir, PathBuf, String) {
     (dir, public_key_path, public_key.trim().to_string())
 }
 
+fn certification_block(public_key: &str) -> String {
+    format!(
+        r#"
+[certification]
+mode = "ssh-signed"
+
+[[certification.trusted_signer]]
+name = "test"
+public_key = "{public_key}"
+"#
+    )
+}
+
 #[test]
 fn certify_default_profile_passes_and_writes_record() {
     // Arrange
     let repo = TempDir::new().unwrap();
+    let (_key_dir, public_key_path, public_key) = generate_ssh_signer();
     init_git_repo(&repo);
     write_repo_file(
         &repo,
         ".repocert/config.toml",
-        r#"
+        &format!(
+            r#"
 schema_version = 1
 
 [checks.test]
@@ -71,12 +86,23 @@ checks = ["test"]
 fixers = ["format"]
 certify = true
 default = true
+{}
 "#,
+            certification_block(&public_key)
+        ),
     );
     commit_all(&repo, "initial");
 
     // Act
-    let output = run_certify(&["--format", "json"], repo.path());
+    let output = run_certify(
+        &[
+            "--format",
+            "json",
+            "--signing-key",
+            public_key_path.to_str().unwrap(),
+        ],
+        repo.path(),
+    );
 
     // Assert
     assert!(output.status.success());
@@ -102,11 +128,13 @@ default = true
 fn certify_repair_needed_probe_fails_and_does_not_write_record() {
     // Arrange
     let repo = TempDir::new().unwrap();
+    let (_key_dir, public_key_path, public_key) = generate_ssh_signer();
     init_git_repo(&repo);
     write_repo_file(
         &repo,
         ".repocert/config.toml",
-        r#"
+        &format!(
+            r#"
 schema_version = 1
 
 [checks.test]
@@ -121,12 +149,23 @@ checks = ["test"]
 fixers = ["format"]
 certify = true
 default = true
+{}
 "#,
+            certification_block(&public_key)
+        ),
     );
     commit_all(&repo, "initial");
 
     // Act
-    let output = run_certify(&["--format", "json"], repo.path());
+    let output = run_certify(
+        &[
+            "--format",
+            "json",
+            "--signing-key",
+            public_key_path.to_str().unwrap(),
+        ],
+        repo.path(),
+    );
 
     // Assert
     assert_eq!(output.status.code(), Some(1));
@@ -151,11 +190,13 @@ default = true
 fn certify_dirty_untracked_file_fails_before_execution() {
     // Arrange
     let repo = TempDir::new().unwrap();
+    let (_key_dir, _public_key_path, public_key) = generate_ssh_signer();
     init_git_repo(&repo);
     write_repo_file(
         &repo,
         ".repocert/config.toml",
-        r#"
+        &format!(
+            r#"
 schema_version = 1
 
 [checks.marker]
@@ -165,7 +206,10 @@ argv = ["sh", "-c", "touch marker.out"]
 checks = ["marker"]
 certify = true
 default = true
+{}
 "#,
+            certification_block(&public_key)
+        ),
     );
     commit_all(&repo, "initial");
     write_repo_file(&repo, "untracked.txt", "dirty\n");
@@ -227,11 +271,13 @@ default = true
 fn certify_multiple_profiles_continue_after_failure_and_record_later_success() {
     // Arrange
     let repo = TempDir::new().unwrap();
+    let (_key_dir, public_key_path, public_key) = generate_ssh_signer();
     init_git_repo(&repo);
     write_repo_file(
         &repo,
         ".repocert/config.toml",
-        r#"
+        &format!(
+            r#"
 schema_version = 1
 
 [checks.fail]
@@ -247,7 +293,10 @@ certify = true
 [profiles.second]
 checks = ["pass"]
 certify = true
+{}
 "#,
+            certification_block(&public_key)
+        ),
     );
     commit_all(&repo, "initial");
 
@@ -260,6 +309,8 @@ certify = true
             "second",
             "--format",
             "json",
+            "--signing-key",
+            public_key_path.to_str().unwrap(),
         ],
         repo.path(),
     );
@@ -386,5 +437,5 @@ public_key = "{public_key}"
             profile: "default".to_string(),
         })
         .unwrap();
-    assert!(matches!(record, Some(CertificationRecord::Signed(_))));
+    assert!(record.is_some());
 }

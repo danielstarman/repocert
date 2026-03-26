@@ -8,7 +8,6 @@ use super::{
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ProfileCertificationState {
     Certified,
-    LegacyUnsigned,
     UntrustedSigner,
     InvalidSignature,
     StaleCommit,
@@ -30,7 +29,7 @@ pub(crate) fn inspect_profile_certification(
     commit: &str,
     profile: &str,
     current_fingerprint: &ContractFingerprint,
-    certification: Option<&CertificationConfig>,
+    certification: &CertificationConfig,
 ) -> Result<ProfileCertificationInspection, StorageError> {
     let key = CertificationKey {
         commit: commit.to_string(),
@@ -80,33 +79,22 @@ pub(crate) fn inspect_profile_certification(
 
 fn signer_name_for_record(
     record: &CertificationRecord,
-    certification: Option<&CertificationConfig>,
+    certification: &CertificationConfig,
 ) -> Option<String> {
-    let CertificationRecord::Signed(record) = record else {
-        return None;
-    };
-    let Some(CertificationConfig {
+    let CertificationConfig {
         mode: CertificationMode::SshSigned { trusted_signer },
-    }) = certification
-    else {
-        return None;
-    };
+    } = certification;
 
-    find_trusted_signer(trusted_signer, &record.signer_fingerprint)
+    find_trusted_signer(trusted_signer.as_slice(), &record.signer_fingerprint)
         .map(|signer| signer.name.clone())
 }
 
 fn authenticate_record(
     record: &CertificationRecord,
-    certification: Option<&CertificationConfig>,
+    certification: &CertificationConfig,
 ) -> Result<ProfileCertificationState, StorageError> {
-    let Some(certification) = certification else {
-        return Ok(ProfileCertificationState::Certified);
-    };
-
-    match (&certification.mode, record) {
-        (_, CertificationRecord::Legacy(_)) => Ok(ProfileCertificationState::LegacyUnsigned),
-        (CertificationMode::SshSigned { trusted_signer }, CertificationRecord::Signed(record)) => {
+    match &certification.mode {
+        CertificationMode::SshSigned { trusted_signer } => {
             match verify_payload_with_ssh(record, trusted_signer) {
                 Ok(()) => Ok(ProfileCertificationState::Certified),
                 Err(crate::certification::SigningError::UntrustedSigner { .. }) => {
@@ -123,17 +111,11 @@ fn authenticate_record(
 
 fn counts_as_certified_elsewhere(
     record: &CertificationRecord,
-    certification: Option<&CertificationConfig>,
+    certification: &CertificationConfig,
 ) -> bool {
     match certification {
-        None => true,
-        Some(CertificationConfig {
+        CertificationConfig {
             mode: CertificationMode::SshSigned { trusted_signer },
-        }) => match record {
-            CertificationRecord::Legacy(_) => false,
-            CertificationRecord::Signed(record) => {
-                verify_payload_with_ssh(record, trusted_signer).is_ok()
-            }
-        },
+        } => verify_payload_with_ssh(record, trusted_signer).is_ok(),
     }
 }

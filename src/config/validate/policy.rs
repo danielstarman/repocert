@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use crate::certification::compute_ssh_key_fingerprint;
@@ -7,7 +7,9 @@ use crate::config::model::{
     CertificationConfig, CertificationMode, HookMode, HooksConfig, LocalPolicy, ProtectedRef,
     RepoPath, TrustedSigner,
 };
-use crate::config::raw::{RawCertification, RawConfig, RawHooks, RawLocalPolicy, RawTrustedSigner};
+use crate::config::raw::{
+    RawCertification, RawConfig, RawHooks, RawLocalPolicy, RawProfile, RawTrustedSigner,
+};
 use crate::contract::validate_pattern;
 
 use super::common::{issue, normalize_repo_path};
@@ -98,9 +100,21 @@ pub(super) fn validate_protected_refs(
 
 pub(super) fn validate_certification(
     raw: Option<&RawCertification>,
+    profiles: &BTreeMap<String, RawProfile>,
     issues: &mut Vec<ValidationIssue>,
 ) -> Option<CertificationConfig> {
-    let raw = raw?;
+    let has_certifiable_profile = profiles.values().any(|profile| profile.certify);
+    let Some(raw) = raw else {
+        if has_certifiable_profile {
+            issues.push(issue(
+                ValidationErrorKind::InvalidCertificationConfig,
+                "certification".to_string(),
+                "certification-eligible profiles require [certification] with a supported signing mode"
+                    .to_string(),
+            ));
+        }
+        return None;
+    };
 
     match raw.mode.as_str() {
         "ssh-signed" => {

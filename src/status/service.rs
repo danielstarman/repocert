@@ -68,16 +68,20 @@ pub fn run_status(options: StatusOptions) -> Result<StatusReport, StatusError> {
             error,
         }
     })?;
+    let certification = loaded.contract.certification.as_ref();
 
     let profile_results = selected_profiles
         .iter()
         .map(|profile| {
+            let certification = certification
+                .as_ref()
+                .expect("certification-eligible profiles require certification config");
             inspect_profile_certification(
                 &store,
                 &commit,
                 profile,
                 &contract_fingerprint,
-                loaded.contract.certification.as_ref(),
+                certification,
             )
             .map(|inspection| StatusProfileResult {
                 profile: inspection.profile,
@@ -195,7 +199,6 @@ fn summarize(results: &[StatusProfileResult]) -> StatusSummary {
     let mut summary = StatusSummary {
         total_profiles: results.len(),
         certified: 0,
-        legacy_unsigned: 0,
         untrusted_signer: 0,
         invalid_signature: 0,
         stale_commit: 0,
@@ -206,7 +209,6 @@ fn summarize(results: &[StatusProfileResult]) -> StatusSummary {
     for result in results {
         match result.state {
             StatusProfileState::Certified => summary.certified += 1,
-            StatusProfileState::LegacyUnsigned => summary.legacy_unsigned += 1,
             StatusProfileState::UntrustedSigner => summary.untrusted_signer += 1,
             StatusProfileState::InvalidSignature => summary.invalid_signature += 1,
             StatusProfileState::StaleCommit => summary.stale_commit += 1,
@@ -221,7 +223,6 @@ fn summarize(results: &[StatusProfileResult]) -> StatusSummary {
 fn map_profile_state(state: &ProfileCertificationState) -> StatusProfileState {
     match state {
         ProfileCertificationState::Certified => StatusProfileState::Certified,
-        ProfileCertificationState::LegacyUnsigned => StatusProfileState::LegacyUnsigned,
         ProfileCertificationState::UntrustedSigner => StatusProfileState::UntrustedSigner,
         ProfileCertificationState::InvalidSignature => StatusProfileState::InvalidSignature,
         ProfileCertificationState::StaleCommit => StatusProfileState::StaleCommit,

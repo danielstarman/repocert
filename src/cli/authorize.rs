@@ -174,7 +174,6 @@ fn profile_result_json(result: &AuthorizeProfileResult) -> Value {
 fn state_label(state: &AuthorizeProfileState) -> &'static str {
     match state {
         AuthorizeProfileState::Certified => "certified",
-        AuthorizeProfileState::LegacyUnsigned => "legacy_unsigned",
         AuthorizeProfileState::UntrustedSigner => "untrusted_signer",
         AuthorizeProfileState::InvalidSignature => "invalid_signature",
         AuthorizeProfileState::StaleCommit => "stale_commit",

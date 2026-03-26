@@ -89,6 +89,13 @@ argv = ["git", "status", "--short"]
 checks = ["git-status"]
 certify = true
 
+[certification]
+mode = "ssh-signed"
+
+[[certification.trusted_signer]]
+name = "test"
+public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJR06amC2Q8j79KKQ4ZHQv6ux8R7L/uL4BlrEGnMHo3l test@example"
+
 [[protected_refs]]
 pattern = "refs/heads/main"
 profile = "release"

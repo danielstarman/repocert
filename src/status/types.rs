@@ -19,8 +19,6 @@ pub struct StatusOptions {
 pub enum StatusProfileState {
     /// The commit is certified for the profile under the current fingerprint.
     Certified,
-    /// A legacy unsigned certification exists for the current commit/profile.
-    LegacyUnsigned,
     /// A signed certification exists, but the signer is not trusted by the repo.
     UntrustedSigner,
     /// A signed certification exists, but the signature does not verify.
@@ -66,8 +64,6 @@ pub struct StatusSummary {
     pub total_profiles: usize,
     /// Certified profile count.
     pub certified: usize,
-    /// Legacy unsigned profile count.
-    pub legacy_unsigned: usize,
     /// Untrusted signer profile count.
     pub untrusted_signer: usize,
     /// Invalid signature profile count.

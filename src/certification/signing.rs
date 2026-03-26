@@ -4,7 +4,7 @@ use std::process::{Command, Output, Stdio};
 
 use tempfile::{NamedTempFile, TempDir};
 
-use super::{CertificationBackend, CertificationPayload, SignedCertificationRecord, SigningError};
+use super::{CertificationBackend, CertificationPayload, CertificationRecord, SigningError};
 use crate::config::TrustedSigner;
 
 /// SSH signature namespace used for authenticated certification records.
@@ -45,7 +45,7 @@ pub fn compute_ssh_key_fingerprint(key_path: &Path) -> Result<String, SigningErr
 pub fn sign_payload_with_ssh(
     signing_key: &Path,
     payload: &CertificationPayload,
-) -> Result<SignedCertificationRecord, SigningError> {
+) -> Result<CertificationRecord, SigningError> {
     ensure_key_file(signing_key)?;
 
     let temp_dir = TempDir::new().map_err(|source| SigningError::TempFile { source })?;
@@ -66,7 +66,7 @@ pub fn sign_payload_with_ssh(
         fs::read_to_string(&signature_path).map_err(|source| SigningError::Io { source })?;
     let signer_fingerprint = compute_ssh_key_fingerprint(signing_key)?;
 
-    Ok(SignedCertificationRecord {
+    Ok(CertificationRecord {
         version: SIGNED_RECORD_VERSION,
         backend: CertificationBackend::Ssh,
         payload: payload.clone(),
@@ -77,7 +77,7 @@ pub fn sign_payload_with_ssh(
 
 /// Verify an SSH-signed certification record against repo-trusted signer keys.
 pub fn verify_payload_with_ssh(
-    record: &SignedCertificationRecord,
+    record: &CertificationRecord,
     trusted_signer: &[TrustedSigner],
 ) -> Result<(), SigningError> {
     validate_signed_record(record)?;
@@ -143,7 +143,7 @@ pub fn find_trusted_signer<'a>(
         .find(|signer| signer.fingerprint == fingerprint)
 }
 
-fn validate_signed_record(record: &SignedCertificationRecord) -> Result<(), SigningError> {
+fn validate_signed_record(record: &CertificationRecord) -> Result<(), SigningError> {
     if record.version != SIGNED_RECORD_VERSION {
         return Err(SigningError::UnsupportedRecordVersion {
             version: record.version,
@@ -244,9 +244,9 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{
-        CertificationBackend, CertificationPayload, SIGNED_RECORD_VERSION,
-        SignedCertificationRecord, compute_ssh_key_fingerprint, encode_payload_for_signing,
-        sign_payload_with_ssh, verify_payload_with_ssh,
+        CertificationBackend, CertificationPayload, CertificationRecord, SIGNED_RECORD_VERSION,
+        compute_ssh_key_fingerprint, encode_payload_for_signing, sign_payload_with_ssh,
+        verify_payload_with_ssh,
     };
     use crate::certification::{CertificationKey, ContractFingerprint, SigningError};
     use crate::config::TrustedSigner;
@@ -264,7 +264,7 @@ mod tests {
     #[test]
     fn verify_payload_with_ssh_rejects_wrong_record_version() {
         let (_dir, public_key_path, public_key) = generate_ssh_signer();
-        let signed = SignedCertificationRecord {
+        let signed = CertificationRecord {
             version: SIGNED_RECORD_VERSION + 1,
             backend: CertificationBackend::Ssh,
             payload: payload(),

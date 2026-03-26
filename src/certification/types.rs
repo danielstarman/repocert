@@ -94,7 +94,7 @@ pub enum CertificationBackend {
 
 /// Versioned signed certification envelope stored on disk.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct SignedCertificationRecord {
+pub struct CertificationRecord {
     /// Envelope version for future format evolution.
     pub version: u64,
     /// Signature backend used for this record.
@@ -107,32 +107,20 @@ pub struct SignedCertificationRecord {
     pub signature: String,
 }
 
-/// Certification record read from git-local storage.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum CertificationRecord {
-    /// Legacy unsigned certification payload.
-    Legacy(CertificationPayload),
-    /// Authenticated signed certification envelope.
-    Signed(SignedCertificationRecord),
-}
-
 impl CertificationRecord {
-    /// Borrow the logical certification payload regardless of storage format.
+    /// Borrow the logical certification payload.
     pub fn payload(&self) -> &CertificationPayload {
-        match self {
-            Self::Legacy(payload) => payload,
-            Self::Signed(record) => &record.payload,
-        }
+        &self.payload
     }
 
     /// Borrow the `(commit, profile)` key for this record.
     pub fn key(&self) -> &CertificationKey {
-        &self.payload().key
+        &self.payload.key
     }
 
     /// Borrow the contract fingerprint carried by this record.
     pub fn contract_fingerprint(&self) -> &ContractFingerprint {
-        &self.payload().contract_fingerprint
+        &self.payload.contract_fingerprint
     }
 }
 

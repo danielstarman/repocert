@@ -98,10 +98,9 @@ fn render_human_success(report: &StatusReport) {
     }
 
     println!(
-        "summary: total_profiles={} certified={} legacy_unsigned={} untrusted_signer={} invalid_signature={} stale_commit={} stale_fingerprint={} uncertified={}",
+        "summary: total_profiles={} certified={} untrusted_signer={} invalid_signature={} stale_commit={} stale_fingerprint={} uncertified={}",
         report.summary.total_profiles,
         report.summary.certified,
-        report.summary.legacy_unsigned,
         report.summary.untrusted_signer,
         report.summary.invalid_signature,
         report.summary.stale_commit,
@@ -147,7 +146,6 @@ fn render_json_success(report: &StatusReport) {
         json!({
             "total_profiles": report.summary.total_profiles,
             "certified": report.summary.certified,
-            "legacy_unsigned": report.summary.legacy_unsigned,
             "untrusted_signer": report.summary.untrusted_signer,
             "invalid_signature": report.summary.invalid_signature,
             "stale_commit": report.summary.stale_commit,
@@ -224,7 +222,6 @@ fn fingerprint_string(fingerprint: &ContractFingerprint) -> String {
 fn profile_state_label(state: &StatusProfileState) -> &'static str {
     match state {
         StatusProfileState::Certified => "certified",
-        StatusProfileState::LegacyUnsigned => "legacy_unsigned",
         StatusProfileState::UntrustedSigner => "untrusted_signer",
         StatusProfileState::InvalidSignature => "invalid_signature",
         StatusProfileState::StaleCommit => "stale_commit",

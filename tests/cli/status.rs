@@ -1,11 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use repocert::certification::{
-    CertificationKey, CertificationPayload, CertificationRecord, CertificationStore,
-    compute_contract_fingerprint,
-};
-use repocert::config::{LoadOptions, load_contract};
+use repocert::certification::{CertificationKey, CertificationPayload, CertificationStore};
 use serde_json::Value;
 use tempfile::TempDir;
 
@@ -42,6 +38,19 @@ fn generate_ssh_signer() -> (TempDir, PathBuf, String) {
     (dir, public_key_path, public_key.trim().to_string())
 }
 
+fn certification_block(public_key: &str) -> String {
+    format!(
+        r#"
+[certification]
+mode = "ssh-signed"
+
+[[certification.trusted_signer]]
+name = "test"
+public_key = "{public_key}"
+"#
+    )
+}
+
 #[test]
 fn status_current_repo_reports_default_profile_and_main_protection() {
     // Arrange
@@ -76,11 +85,13 @@ fn status_current_repo_reports_default_profile_and_main_protection() {
 fn status_certified_profile_returns_certified_state() {
     // Arrange
     let repo = TempDir::new().unwrap();
+    let (_key_dir, public_key_path, public_key) = generate_ssh_signer();
     init_git_repo(&repo);
     write_repo_file(
         &repo,
         ".repocert/config.toml",
-        r#"
+        &format!(
+            r#"
 schema_version = 1
 
 [checks.test]
@@ -90,13 +101,20 @@ argv = ["sh", "-c", "exit 0"]
 checks = ["test"]
 certify = true
 default = true
+{}
 "#,
+            certification_block(&public_key)
+        ),
     );
     commit_all(&repo, "initial");
     let certify = Command::new(repocert_bin())
-        .arg("certify")
-        .arg("--format")
-        .arg("json")
+        .args([
+            "certify",
+            "--format",
+            "json",
+            "--signing-key",
+            public_key_path.to_str().unwrap(),
+        ])
         .current_dir(repo.path())
         .output()
         .unwrap();
@@ -117,11 +135,13 @@ default = true
 fn status_changed_contract_returns_stale_fingerprint() {
     // Arrange
     let repo = TempDir::new().unwrap();
+    let (_key_dir, public_key_path, public_key) = generate_ssh_signer();
     init_git_repo(&repo);
     write_repo_file(
         &repo,
         ".repocert/config.toml",
-        r#"
+        &format!(
+            r#"
 schema_version = 1
 
 [checks.test]
@@ -131,13 +151,20 @@ argv = ["sh", "-c", "exit 0"]
 checks = ["test"]
 certify = true
 default = true
+{}
 "#,
+            certification_block(&public_key)
+        ),
     );
     commit_all(&repo, "initial");
     let certify = Command::new(repocert_bin())
-        .arg("certify")
-        .arg("--format")
-        .arg("json")
+        .args([
+            "certify",
+            "--format",
+            "json",
+            "--signing-key",
+            public_key_path.to_str().unwrap(),
+        ])
         .current_dir(repo.path())
         .output()
         .unwrap();
@@ -145,7 +172,8 @@ default = true
     write_repo_file(
         &repo,
         ".repocert/config.toml",
-        r#"
+        &format!(
+            r#"
 schema_version = 1
 
 [checks.test]
@@ -158,7 +186,10 @@ argv = ["sh", "-c", "exit 0"]
 checks = ["test"]
 certify = true
 default = true
+{}
 "#,
+            certification_block(&public_key)
+        ),
     );
 
     // Act
@@ -174,11 +205,13 @@ default = true
 fn status_other_commit_record_returns_stale_commit() {
     // Arrange
     let repo = TempDir::new().unwrap();
+    let (_key_dir, public_key_path, public_key) = generate_ssh_signer();
     init_git_repo(&repo);
     write_repo_file(
         &repo,
         ".repocert/config.toml",
-        r#"
+        &format!(
+            r#"
 schema_version = 1
 
 [checks.test]
@@ -188,13 +221,20 @@ argv = ["sh", "-c", "exit 0"]
 checks = ["test"]
 certify = true
 default = true
+{}
 "#,
+            certification_block(&public_key)
+        ),
     );
     commit_all(&repo, "initial");
     let certify = Command::new(repocert_bin())
-        .arg("certify")
-        .arg("--format")
-        .arg("json")
+        .args([
+            "certify",
+            "--format",
+            "json",
+            "--signing-key",
+            public_key_path.to_str().unwrap(),
+        ])
         .current_dir(repo.path())
         .output()
         .unwrap();
@@ -219,11 +259,13 @@ default = true
 fn status_assert_certified_returns_failure_for_uncertified_profile() {
     // Arrange
     let repo = TempDir::new().unwrap();
+    let (_key_dir, _public_key_path, public_key) = generate_ssh_signer();
     init_git_repo(&repo);
     write_repo_file(
         &repo,
         ".repocert/config.toml",
-        r#"
+        &format!(
+            r#"
 schema_version = 1
 
 [checks.test]
@@ -233,7 +275,10 @@ argv = ["sh", "-c", "exit 0"]
 checks = ["test"]
 certify = true
 default = true
+{}
 "#,
+            certification_block(&public_key)
+        ),
     );
     commit_all(&repo, "initial");
 
@@ -250,11 +295,13 @@ default = true
 #[test]
 fn status_assert_certified_on_main_infers_default_profile() {
     let repo = TempDir::new().unwrap();
+    let (_key_dir, public_key_path, public_key) = generate_ssh_signer();
     init_git_repo(&repo);
     write_repo_file(
         &repo,
         ".repocert/config.toml",
-        r#"
+        &format!(
+            r#"
 schema_version = 1
 
 [checks.fast]
@@ -280,13 +327,20 @@ profile = "default"
 [[protected_refs]]
 pattern = "refs/heads/release/*"
 profile = "release"
+{}
 "#,
+            certification_block(&public_key)
+        ),
     );
     commit_all(&repo, "initial");
     let certify = Command::new(repocert_bin())
-        .arg("certify")
-        .arg("--format")
-        .arg("json")
+        .args([
+            "certify",
+            "--format",
+            "json",
+            "--signing-key",
+            public_key_path.to_str().unwrap(),
+        ])
         .current_dir(repo.path())
         .output()
         .unwrap();
@@ -303,11 +357,13 @@ profile = "release"
 #[test]
 fn status_assert_certified_on_release_branch_infers_release_profile() {
     let repo = TempDir::new().unwrap();
+    let (_key_dir, public_key_path, public_key) = generate_ssh_signer();
     init_git_repo(&repo);
     write_repo_file(
         &repo,
         ".repocert/config.toml",
-        r#"
+        &format!(
+            r#"
 schema_version = 1
 
 [checks.fast]
@@ -333,7 +389,10 @@ profile = "default"
 [[protected_refs]]
 pattern = "refs/heads/release/*"
 profile = "release"
+{}
 "#,
+            certification_block(&public_key)
+        ),
     );
     commit_all(&repo, "initial");
     let checkout = Command::new("git")
@@ -343,7 +402,15 @@ profile = "release"
         .unwrap();
     assert!(checkout.status.success());
     let certify = Command::new(repocert_bin())
-        .args(["certify", "--profile", "release", "--format", "json"])
+        .args([
+            "certify",
+            "--profile",
+            "release",
+            "--format",
+            "json",
+            "--signing-key",
+            public_key_path.to_str().unwrap(),
+        ])
         .current_dir(repo.path())
         .output()
         .unwrap();
@@ -361,11 +428,13 @@ profile = "release"
 fn status_protected_refs_report_certification_state() {
     // Arrange
     let repo = TempDir::new().unwrap();
+    let (_key_dir, public_key_path, public_key) = generate_ssh_signer();
     init_git_repo(&repo);
     write_repo_file(
         &repo,
         ".repocert/config.toml",
-        r#"
+        &format!(
+            r#"
 schema_version = 1
 
 [checks.test]
@@ -379,13 +448,20 @@ default = true
 [[protected_refs]]
 pattern = "refs/heads/main"
 profile = "release"
+{}
 "#,
+            certification_block(&public_key)
+        ),
     );
     commit_all(&repo, "initial");
     let certify = Command::new(repocert_bin())
-        .arg("certify")
-        .arg("--format")
-        .arg("json")
+        .args([
+            "certify",
+            "--format",
+            "json",
+            "--signing-key",
+            public_key_path.to_str().unwrap(),
+        ])
         .current_dir(repo.path())
         .output()
         .unwrap();
@@ -403,7 +479,7 @@ profile = "release"
 }
 
 #[test]
-fn status_signed_mode_surfaces_legacy_unsigned_records_explicitly() {
+fn status_legacy_unsigned_record_returns_storage_error() {
     let repo = TempDir::new().unwrap();
     let (_key_dir, _public_key_path, public_key) = generate_ssh_signer();
     init_git_repo(&repo);
@@ -433,26 +509,28 @@ public_key = "{public_key}"
     );
     commit_all(&repo, "initial");
 
-    let loaded = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap();
-    let fingerprint = compute_contract_fingerprint(&loaded).unwrap();
     let commit = head_commit(&repo);
     let store = CertificationStore::open(repo.path()).unwrap();
-    store
-        .write(&CertificationRecord::Legacy(CertificationPayload {
+    let path = store.root_dir().join(&commit).join("64656661756c74.json");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &path,
+        serde_json::to_vec_pretty(&CertificationPayload {
             key: CertificationKey {
                 commit,
                 profile: "default".to_string(),
             },
-            contract_fingerprint: fingerprint,
-        }))
-        .unwrap();
+            contract_fingerprint: repocert::certification::ContractFingerprint::from_bytes([7; 32]),
+        })
+        .unwrap(),
+    )
+    .unwrap();
 
     let output = run_status(&["--format", "json"], repo.path());
 
-    assert!(output.status.success());
+    assert_eq!(output.status.code(), Some(1));
     let json: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(json["profile_results"][0]["state"], "legacy_unsigned");
-    assert_eq!(json["summary"]["legacy_unsigned"], 1);
+    assert_eq!(json["error"]["category"], "storage");
 }
 
 #[test]
