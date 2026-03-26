@@ -116,20 +116,24 @@ fn forward_to_parent_stderr<R: Read + Send + 'static>(
     mut reader: R,
 ) -> thread::JoinHandle<io::Result<()>> {
     thread::spawn(move || {
-        let mut stderr = io::stderr();
-        let mut buffer = [0u8; 8192];
-
-        loop {
-            let read = reader.read(&mut buffer)?;
-            if read == 0 {
-                break;
-            }
-            stderr.write_all(&buffer[..read])?;
-            stderr.flush()?;
-        }
-
-        Ok(())
+        let stderr = io::stderr();
+        let mut stderr = stderr.lock();
+        forward_output(&mut reader, &mut stderr)
     })
+}
+
+fn forward_output<R: Read, W: Write>(reader: &mut R, writer: &mut W) -> io::Result<()> {
+    let mut buffer = [0u8; 8192];
+
+    loop {
+        let read = reader.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        writer.write_all(&buffer[..read])?;
+    }
+
+    Ok(())
 }
 
 fn join_forwarder(handle: Option<thread::JoinHandle<io::Result<()>>>) -> Option<String> {
@@ -149,5 +153,71 @@ fn finish_execution(
         status,
         duration_ms: start.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
         message,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::{self, Read, Write};
+
+    use super::forward_output;
+
+    #[test]
+    fn forward_output_writes_all_chunks_without_flushing() {
+        let mut reader = ChunkedReader::new(b"repocert streams child output".to_vec(), 4);
+        let mut writer = RecordingWriter::default();
+
+        forward_output(&mut reader, &mut writer).unwrap();
+
+        assert_eq!(writer.bytes, b"repocert streams child output");
+        assert_eq!(writer.flush_calls, 0);
+    }
+
+    struct ChunkedReader {
+        bytes: Vec<u8>,
+        chunk_size: usize,
+        offset: usize,
+    }
+
+    impl ChunkedReader {
+        fn new(bytes: Vec<u8>, chunk_size: usize) -> Self {
+            Self {
+                bytes,
+                chunk_size,
+                offset: 0,
+            }
+        }
+    }
+
+    impl Read for ChunkedReader {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            if self.offset >= self.bytes.len() {
+                return Ok(0);
+            }
+
+            let remaining = self.bytes.len() - self.offset;
+            let read_len = remaining.min(self.chunk_size).min(buffer.len());
+            buffer[..read_len].copy_from_slice(&self.bytes[self.offset..self.offset + read_len]);
+            self.offset += read_len;
+            Ok(read_len)
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingWriter {
+        bytes: Vec<u8>,
+        flush_calls: usize,
+    }
+
+    impl Write for RecordingWriter {
+        fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+            self.bytes.extend_from_slice(buffer);
+            Ok(buffer.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            self.flush_calls += 1;
+            Ok(())
+        }
     }
 }
