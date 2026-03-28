@@ -24,6 +24,9 @@ pub struct MatchedRule {
 }
 
 /// Certification state for a required profile during authorization.
+///
+/// Only [`AuthorizeProfileState::Certified`] allows a protected ref update.
+/// All other states are explanatory deny states.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AuthorizeProfileState {
     /// The target commit is certified for the profile.

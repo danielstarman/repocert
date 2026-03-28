@@ -110,6 +110,8 @@ between certification and push.
 targets a protected ref, and if so, whether the target commit is certified
 under the required profile with a current contract fingerprint. Enforcement
 trusts only valid signed certification records from repo-trusted signer keys.
+In signed mode, only the `certified` state satisfies certification or
+protected-ref enforcement; other states are diagnostic non-certification states.
 
 **Local policy.** Optional rules enforced during development, such as
 preventing direct commits to protected branches or requiring a clean

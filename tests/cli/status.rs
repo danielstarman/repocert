@@ -2,9 +2,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use repocert::certification::{
-    CertificationKey, CertificationPayload, CertificationStore, ContractFingerprint,
-    sign_payload_with_ssh,
+    CertificationKey, CertificationPayload, CertificationRecord, CertificationStore,
+    ContractFingerprint, compute_contract_fingerprint, sign_payload_with_ssh,
 };
+use repocert::config::{LoadOptions, load_contract};
 use serde_json::Value;
 use tempfile::TempDir;
 
@@ -653,6 +654,112 @@ public_key = "{public_key}"
     assert_eq!(json["profile_results"][0]["signer_name"], "test");
 }
 
+#[test]
+fn status_signed_mode_untrusted_signer_reports_state() {
+    let repo = TempDir::new().unwrap();
+    let (_trusted_dir, _trusted_key_path, trusted_public_key) = generate_ssh_signer();
+    let (_other_dir, other_key_path, _other_public_key) = generate_ssh_signer();
+    init_git_repo(&repo);
+    write_repo_file(
+        &repo,
+        ".repocert/config.toml",
+        &format!(
+            r#"
+schema_version = 1
+
+[checks.test]
+argv = ["sh", "-c", "exit 0"]
+
+[profiles.default]
+checks = ["test"]
+certify = true
+default = true
+
+[certification]
+mode = "ssh-signed"
+
+[[certification.trusted_signer]]
+name = "trusted"
+public_key = "{trusted_public_key}"
+"#
+        ),
+    );
+    commit_all(&repo, "initial");
+    let commit = head_commit(&repo);
+    let record = sign_payload_with_ssh(
+        &other_key_path,
+        &CertificationPayload {
+            key: CertificationKey {
+                commit,
+                profile: "default".to_string(),
+            },
+            contract_fingerprint: current_contract_fingerprint(&repo),
+        },
+    )
+    .unwrap();
+    CertificationStore::open(repo.path())
+        .unwrap()
+        .write(&record)
+        .unwrap();
+
+    let json_output = run_status(&["--format", "json"], repo.path());
+
+    assert!(json_output.status.success());
+    let json: Value = serde_json::from_slice(&json_output.stdout).unwrap();
+    assert_eq!(json["profile_results"][0]["state"], "untrusted_signer");
+    assert_eq!(json["profile_results"][0]["signer_name"], Value::Null);
+}
+
+#[test]
+fn status_signed_mode_invalid_signature_reports_state() {
+    let repo = TempDir::new().unwrap();
+    let (_key_dir, public_key_path, public_key) = generate_ssh_signer();
+    init_git_repo(&repo);
+    write_repo_file(
+        &repo,
+        ".repocert/config.toml",
+        &format!(
+            r#"
+schema_version = 1
+
+[checks.test]
+argv = ["sh", "-c", "exit 0"]
+
+[profiles.default]
+checks = ["test"]
+certify = true
+default = true
+{}
+"#,
+            certification_block(&public_key)
+        ),
+    );
+    commit_all(&repo, "initial");
+    let certify = Command::new(repocert_bin())
+        .args([
+            "certify",
+            "--format",
+            "json",
+            "--signing-key",
+            public_key_path.to_str().unwrap(),
+        ])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+    assert!(certify.status.success());
+
+    let commit = head_commit(&repo);
+    let store = CertificationStore::open(repo.path()).unwrap();
+    let path = store.root_dir().join(&commit).join("64656661756c74.json");
+    tamper_record_signature(&path);
+
+    let output = run_status(&["--format", "json"], repo.path());
+
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["profile_results"][0]["state"], "invalid_signature");
+}
+
 fn head_commit_previous(repo: &TempDir) -> String {
     let output = Command::new("git")
         .args(["rev-parse", "HEAD^"])
@@ -671,4 +778,21 @@ fn head_commit(repo: &TempDir) -> String {
         .unwrap();
     assert!(output.status.success());
     String::from_utf8(output.stdout).unwrap().trim().to_string()
+}
+
+fn tamper_record_signature(path: &Path) {
+    let mut record: CertificationRecord =
+        serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    record.signature = "invalid-signature".to_string();
+    std::fs::write(path, serde_json::to_vec_pretty(&record).unwrap()).unwrap();
+}
+
+fn current_contract_fingerprint(repo: &TempDir) -> ContractFingerprint {
+    let loaded = load_contract(LoadOptions {
+        start_dir: None,
+        repo_root: Some(repo.path().to_path_buf()),
+        config_path: None,
+    })
+    .unwrap();
+    compute_contract_fingerprint(&loaded).unwrap()
 }

@@ -15,6 +15,9 @@ pub struct StatusOptions {
 }
 
 /// Certification state for one profile on the inspected commit.
+///
+/// Only [`StatusProfileState::Certified`] satisfies certification requirements.
+/// All other states are explanatory non-certification states.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum StatusProfileState {
     /// The commit is certified for the profile under the current fingerprint.
