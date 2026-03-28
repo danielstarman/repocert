@@ -222,11 +222,10 @@ default = true
     let json: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["error"]["category"], "worktree");
     assert!(
-        json["error"]["details"]["dirty_paths"]
+        !json["error"]["details"]["dirty_paths"]
             .as_array()
             .unwrap()
-            .len()
-            >= 1
+            .is_empty()
     );
     assert!(!repo.path().join("marker.out").exists());
 }

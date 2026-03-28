@@ -2,68 +2,36 @@ use std::process::ExitCode;
 
 use serde_json::Map;
 
-use repocert::config::{LoadError, LoadOptions, load_contract};
+use repocert::config::LoadPaths;
 
 use super::app::{OutputFormat, ValidateArgs};
-use super::json::{command_error, command_success};
+use super::json::command_success;
+use super::session::CommandRuntime;
 
 pub(super) fn run(args: ValidateArgs) -> ExitCode {
-    let load_options = LoadOptions {
-        start_dir: None,
-        repo_root: args.repo_root,
-        config_path: args.config_path,
-    };
+    let runtime =
+        match CommandRuntime::load("validate", args.format, args.repo_root, args.config_path) {
+            Ok(runtime) => runtime,
+            Err(code) => return code,
+        };
 
-    match load_contract(load_options) {
-        Ok(loaded) => {
-            match args.format {
-                OutputFormat::Human => {
-                    println!("PASS validate");
-                    println!("repo_root: {}", loaded.paths.repo_root.display());
-                    println!("config_path: {}", loaded.paths.config_path.display());
-                }
-                OutputFormat::Json => {
-                    let output = command_success("validate", &loaded.paths, true, Map::new());
-                    println!(
-                        "{}",
-                        serde_json::to_string(&output).expect("JSON serialization should succeed")
-                    );
-                }
-            }
-            ExitCode::SUCCESS
-        }
-        Err(failure) => {
-            let category = error_category(&failure.error);
-
-            match args.format {
-                OutputFormat::Human => {
-                    eprintln!("FAIL validate [{category}]");
-                    eprintln!("{}", failure.error);
-                }
-                OutputFormat::Json => {
-                    let output = command_error(
-                        "validate",
-                        failure.paths.as_ref(),
-                        category,
-                        failure.error.to_string(),
-                        None,
-                    );
-                    println!(
-                        "{}",
-                        serde_json::to_string(&output).expect("JSON serialization should succeed")
-                    );
-                }
-            }
-
-            ExitCode::from(1)
-        }
+    match runtime.format() {
+        OutputFormat::Human => render_human_success(runtime.paths()),
+        OutputFormat::Json => render_json_success(runtime.paths()),
     }
+    ExitCode::SUCCESS
 }
 
-fn error_category(error: &LoadError) -> &'static str {
-    match error {
-        LoadError::Discovery(_) => "discovery",
-        LoadError::Parse(_) => "parse",
-        LoadError::Validation(_) => "validation",
-    }
+fn render_human_success(paths: &LoadPaths) {
+    println!("PASS validate");
+    println!("repo_root: {}", paths.repo_root.display());
+    println!("config_path: {}", paths.config_path.display());
+}
+
+fn render_json_success(paths: &LoadPaths) {
+    let output = command_success("validate", paths, true, Map::new());
+    println!(
+        "{}",
+        serde_json::to_string(&output).expect("JSON serialization should succeed")
+    );
 }

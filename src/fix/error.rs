@@ -1,33 +1,13 @@
 use thiserror::Error;
 
-use crate::config::{LoadFailure, LoadPaths};
 use crate::contract::SelectionError;
 
 /// Errors returned while running `repocert fix`.
 #[derive(Debug, Error)]
 pub enum FixError {
-    /// Contract discovery, parsing, or validation failed before execution.
-    #[error(transparent)]
-    Load(#[from] LoadFailure),
     /// Profile or named-fixer selection failed.
-    #[error("{error}")]
-    Selection {
-        /// Resolved repository/config paths.
-        paths: LoadPaths,
-        /// Underlying selection error.
-        #[source]
-        error: FixSelectionError,
-    },
-}
-
-impl FixError {
-    /// Return resolved paths when they were available for this failure.
-    pub fn paths(&self) -> Option<&LoadPaths> {
-        match self {
-            Self::Load(error) => error.paths.as_ref(),
-            Self::Selection { paths, .. } => Some(paths),
-        }
-    }
+    #[error(transparent)]
+    Selection(#[from] FixSelectionError),
 }
 
 /// Selection errors specific to `repocert fix`.

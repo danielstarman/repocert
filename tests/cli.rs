@@ -1,6 +1,7 @@
 use std::fs;
 use std::process::Command;
 
+use repocert::config::{LoadOptions, RepoSession, load_repo_session, resolve_paths};
 use tempfile::TempDir;
 
 #[path = "cli/authorize.rs"]
@@ -19,6 +20,11 @@ mod cli_local_policy;
 mod cli_status;
 #[path = "cli/validate.rs"]
 mod cli_validate;
+
+pub(crate) fn load_contract(options: LoadOptions) -> RepoSession {
+    let paths = resolve_paths(options).unwrap();
+    load_repo_session(paths).unwrap()
+}
 
 pub(crate) fn write_repo_file(repo: &TempDir, relative_path: &str, contents: &str) {
     let path = repo.path().join(relative_path);

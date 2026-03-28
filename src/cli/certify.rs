@@ -7,31 +7,33 @@ use repocert::certify::{
     CertifyError, CertifyItemKind, CertifyItemOutcome, CertifyOptions, CertifyProfileOutcome,
     CertifyReport, run_certify,
 };
-use repocert::config::LoadError;
+use repocert::config::LoadPaths;
 
 use super::app::{CertifyArgs, OutputFormat};
-use super::json::{command_error, command_success, execution_result, profile_outcome_result};
+use super::json::{command_success, execution_result, profile_outcome_result};
+use super::session::CommandRuntime;
 
 pub(super) fn run(args: CertifyArgs) -> ExitCode {
     let signing_key = args
         .signing_key
         .or_else(|| std::env::var_os("REPOCERT_SIGNING_KEY").map(Into::into));
     let options = CertifyOptions {
-        load_options: repocert::config::LoadOptions {
-            start_dir: None,
-            repo_root: args.repo_root,
-            config_path: args.config_path,
-        },
         profiles: args.profile,
         signing_key,
         emit_progress: true,
     };
 
-    match run_certify(options) {
+    let runtime =
+        match CommandRuntime::load("certify", args.format, args.repo_root, args.config_path) {
+            Ok(runtime) => runtime,
+            Err(code) => return code,
+        };
+
+    match run_certify(runtime.session(), options) {
         Ok(report) => {
-            match args.format {
-                OutputFormat::Human => render_human_success(&report),
-                OutputFormat::Json => render_json_success(&report),
+            match runtime.format() {
+                OutputFormat::Human => render_human_success(runtime.paths(), &report),
+                OutputFormat::Json => render_json_success(runtime.paths(), &report),
             }
 
             if report.ok() {
@@ -41,20 +43,32 @@ pub(super) fn run(args: CertifyArgs) -> ExitCode {
             }
         }
         Err(error) => {
-            match args.format {
-                OutputFormat::Human => render_human_error(&error),
-                OutputFormat::Json => render_json_error(&error),
-            }
-            ExitCode::from(1)
+            let details = match &error {
+                CertifyError::DirtyWorktree { dirty_paths } => {
+                    let mut detail_fields = Map::new();
+                    detail_fields.insert(
+                        "dirty_paths".to_string(),
+                        Value::Array(
+                            dirty_paths
+                                .split(", ")
+                                .map(|path| Value::String(path.to_string()))
+                                .collect(),
+                        ),
+                    );
+                    Some(detail_fields)
+                }
+                _ => None,
+            };
+            runtime.fail(error_category(&error), &error.to_string(), details)
         }
     }
 }
 
-fn render_human_success(report: &CertifyReport) {
+fn render_human_success(paths: &LoadPaths, report: &CertifyReport) {
     let overall = if report.ok() { "PASS" } else { "FAIL" };
     println!("{overall} certify");
-    println!("repo_root: {}", report.paths.repo_root.display());
-    println!("config_path: {}", report.paths.config_path.display());
+    println!("repo_root: {}", paths.repo_root.display());
+    println!("config_path: {}", paths.config_path.display());
     println!("commit: {}", report.commit);
     println!(
         "contract_fingerprint: {}",
@@ -97,7 +111,7 @@ fn render_human_success(report: &CertifyReport) {
     );
 }
 
-fn render_json_success(report: &CertifyReport) {
+fn render_json_success(paths: &LoadPaths, report: &CertifyReport) {
     let mut command_fields = Map::new();
     command_fields.insert("commit".to_string(), json!(report.commit));
     command_fields.insert(
@@ -154,42 +168,7 @@ fn render_json_success(report: &CertifyReport) {
             "repair_needed": report.summary.repair_needed,
         }),
     );
-    let output = command_success("certify", &report.paths, report.ok(), command_fields);
-    println!(
-        "{}",
-        serde_json::to_string(&output).expect("JSON serialization should succeed")
-    );
-}
-
-fn render_human_error(error: &CertifyError) {
-    eprintln!("FAIL certify [{}]", error_category(error));
-    eprintln!("{error}");
-}
-
-fn render_json_error(error: &CertifyError) {
-    let command_fields = match error {
-        CertifyError::DirtyWorktree { dirty_paths, .. } => Some({
-            let mut details = Map::new();
-            details.insert(
-                "dirty_paths".to_string(),
-                Value::Array(
-                    dirty_paths
-                        .split(", ")
-                        .map(|path| Value::String(path.to_string()))
-                        .collect(),
-                ),
-            );
-            details
-        }),
-        _ => None,
-    };
-    let output = command_error(
-        "certify",
-        error.paths(),
-        error_category(error),
-        error.to_string(),
-        command_fields,
-    );
+    let output = command_success("certify", paths, report.ok(), command_fields);
     println!(
         "{}",
         serde_json::to_string(&output).expect("JSON serialization should succeed")
@@ -198,17 +177,12 @@ fn render_json_error(error: &CertifyError) {
 
 fn error_category(error: &CertifyError) -> &'static str {
     match error {
-        CertifyError::Load(failure) => match &failure.error {
-            LoadError::Discovery(_) => "discovery",
-            LoadError::Parse(_) => "parse",
-            LoadError::Validation(_) => "validation",
-        },
-        CertifyError::Selection { .. } => "selection",
+        CertifyError::Selection(_) => "selection",
         CertifyError::DirtyWorktree { .. } => "worktree",
-        CertifyError::GitStatus { .. } | CertifyError::GitCommit { .. } => "git",
-        CertifyError::Fingerprint { .. } => "fingerprint",
-        CertifyError::MissingSigningKeySelection { .. } | CertifyError::Signing { .. } => "signing",
-        CertifyError::Storage { .. } => "storage",
+        CertifyError::GitStatus(_) | CertifyError::GitCommit(_) => "git",
+        CertifyError::Fingerprint(_) => "fingerprint",
+        CertifyError::MissingSigningKeySelection | CertifyError::Signing { .. } => "signing",
+        CertifyError::Storage(_) => "storage",
     }
 }
 

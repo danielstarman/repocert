@@ -9,10 +9,10 @@ mod validate;
 pub use error::{
     DiscoveryError, LoadError, ParseError, ValidationErrorKind, ValidationErrors, ValidationIssue,
 };
-/// Load a repository contract from disk.
-pub use loader::{LoadFailure, LoadOptions, load_contract};
+/// Resolve and load repository contract state from disk.
+pub use loader::{LoadOptions, load_repo_session, resolve_paths};
 /// The validated repository contract model.
 pub use model::{
     CertificationConfig, CertificationMode, CommandSpec, Contract, FixerSpec, HookMode,
-    HooksConfig, LoadPaths, LoadedContract, Profile, ProtectedRef, RepoPath, TrustedSigner,
+    HooksConfig, LoadPaths, Profile, ProtectedRef, RepoPath, RepoSession, TrustedSigner,
 };

@@ -1,6 +1,6 @@
-use std::path::PathBuf;
+use std::path::Path;
 
-use crate::config::load_contract;
+use crate::config::RepoSession;
 use crate::contract::progress_label;
 
 use super::error::CheckError;
@@ -9,26 +9,18 @@ use super::plan::{SelectionPlan, build_selection_plan};
 use super::types::{CheckItemResult, CheckOptions, CheckOutcome, CheckReport, CheckSummary};
 
 /// Run contract checks and fixer probes for the selected profiles or named checks.
-pub fn run_check(options: CheckOptions) -> Result<CheckReport, CheckError> {
+pub fn run_check(session: &RepoSession, options: CheckOptions) -> Result<CheckReport, CheckError> {
     let CheckOptions {
-        load_options,
         profiles,
         names,
         emit_progress,
     } = options;
 
-    let loaded = load_contract(load_options)?;
-    let plan = build_selection_plan(&loaded.contract, &profiles, &names).map_err(|error| {
-        CheckError::Selection {
-            paths: loaded.paths.clone(),
-            error,
-        }
-    })?;
-    let results = execute_plan(&loaded.paths.repo_root, &plan, emit_progress);
+    let plan = build_selection_plan(&session.contract, &profiles, &names)?;
+    let results = execute_plan(&session.paths.repo_root, &plan, emit_progress);
     let summary = summarize(&results);
 
     Ok(CheckReport {
-        paths: loaded.paths,
         selection_mode: plan.selection_mode,
         profiles: plan.profiles,
         checks: plan.checks,
@@ -38,7 +30,7 @@ pub fn run_check(options: CheckOptions) -> Result<CheckReport, CheckError> {
 }
 
 fn execute_plan(
-    repo_root: &PathBuf,
+    repo_root: &Path,
     plan: &SelectionPlan,
     emit_progress: bool,
 ) -> Vec<CheckItemResult> {

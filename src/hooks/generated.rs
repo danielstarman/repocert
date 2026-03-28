@@ -27,13 +27,12 @@ pub(super) fn generated_hooks_dir(git_dir: &Path) -> PathBuf {
 }
 
 pub(super) fn sync_generated_hooks(
-    paths: &crate::config::LoadPaths,
     hooks_dir: &Path,
     hooks: &[GeneratedHook],
     executable_path: &Path,
+    repo_root: &Path,
 ) -> Result<Vec<String>, InstallHooksError> {
     fs::create_dir_all(hooks_dir).map_err(|source| InstallHooksError::GeneratedHookWrite {
-        paths: paths.clone(),
         hook: "directory".to_string(),
         path: hooks_dir.to_path_buf(),
         source,
@@ -42,7 +41,7 @@ pub(super) fn sync_generated_hooks(
     let mut repaired = Vec::new();
     for hook in hooks {
         let path = hooks_dir.join(hook.as_str());
-        let content = hook_script(hook, executable_path, &paths.repo_root);
+        let content = hook_script(hook, executable_path, repo_root);
         let needs_write = match fs::read_to_string(&path) {
             Ok(existing) => existing != content,
             Err(_) => true,
@@ -50,13 +49,11 @@ pub(super) fn sync_generated_hooks(
 
         if needs_write {
             fs::write(&path, content).map_err(|source| InstallHooksError::GeneratedHookWrite {
-                paths: paths.clone(),
                 hook: hook.as_str().to_string(),
                 path: path.clone(),
                 source,
             })?;
             set_executable(&path).map_err(|source| InstallHooksError::GeneratedHookWrite {
-                paths: paths.clone(),
                 hook: hook.as_str().to_string(),
                 path: path.clone(),
                 source,
@@ -72,13 +69,11 @@ pub(super) fn sync_generated_hooks(
         .collect::<std::collections::BTreeSet<_>>();
     for entry in
         fs::read_dir(hooks_dir).map_err(|source| InstallHooksError::GeneratedHookPrune {
-            paths: paths.clone(),
             path: hooks_dir.to_path_buf(),
             source,
         })?
     {
         let entry = entry.map_err(|source| InstallHooksError::GeneratedHookPrune {
-            paths: paths.clone(),
             path: hooks_dir.to_path_buf(),
             source,
         })?;
@@ -86,7 +81,6 @@ pub(super) fn sync_generated_hooks(
         if !desired.contains(&file_name) && entry.path().is_file() {
             fs::remove_file(entry.path()).map_err(|source| {
                 InstallHooksError::GeneratedHookPrune {
-                    paths: paths.clone(),
                     path: entry.path(),
                     source,
                 }

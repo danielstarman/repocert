@@ -10,15 +10,32 @@ pub struct LoadPaths {
     pub config_path: PathBuf,
 }
 
-/// A fully loaded contract plus the exact config bytes used to produce it.
+/// A resolved repository session with validated contract state and raw contract bytes.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct LoadedContract {
+pub struct RepoSession {
     /// Resolved repository/config paths.
-    pub paths: LoadPaths,
+    pub(crate) paths: LoadPaths,
     /// Raw config bytes used for fingerprinting.
-    pub config_bytes: Vec<u8>,
+    pub(crate) config_bytes: Vec<u8>,
     /// Validated contract model.
-    pub contract: Contract,
+    pub(crate) contract: Contract,
+}
+
+impl RepoSession {
+    /// Return the resolved repository/config paths for this session.
+    pub fn paths(&self) -> &LoadPaths {
+        &self.paths
+    }
+
+    /// Return the exact config bytes that were loaded for this session.
+    pub fn config_bytes(&self) -> &[u8] {
+        &self.config_bytes
+    }
+
+    /// Return the validated contract for this session.
+    pub fn contract(&self) -> &Contract {
+        &self.contract
+    }
 }
 
 /// Validated repository contract model.

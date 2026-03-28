@@ -6,6 +6,9 @@ argv = ["cargo", "fmt", "--check"]
 [checks.test]
 argv = ["cargo", "test"]
 
+[checks.clippy]
+argv = ["cargo", "clippy", "--all-targets", "--all-features", "--", "-D", "warnings"]
+
 [checks.docs]
 argv = ["sh", "-c", "RUSTDOCFLAGS='-D warnings' cargo doc --no-deps"]
 
@@ -21,7 +24,7 @@ argv = ["cargo", "fmt"]
 probe_argv = ["cargo", "fmt", "--check"]
 
 [profiles.default]
-checks = ["fmt", "test"]
+checks = ["fmt", "clippy", "test"]
 fixers = ["fmt"]
 certify = true
 default = true

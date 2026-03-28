@@ -3,32 +3,34 @@ use std::process::ExitCode;
 use serde_json::{Map, Value, json};
 
 use repocert::certification::ContractFingerprint;
-use repocert::config::LoadError;
+use repocert::config::LoadPaths;
 use repocert::status::{
     ProtectedRefStatus, StatusError, StatusOptions, StatusProfileResult, StatusProfileState,
     StatusReport, run_status,
 };
 
 use super::app::{OutputFormat, StatusArgs};
-use super::json::{command_error, command_success, profile_state_result, protected_ref_result};
+use super::json::{command_success, profile_state_result, protected_ref_result};
+use super::session::CommandRuntime;
 
 pub(super) fn run(args: StatusArgs) -> ExitCode {
     let options = StatusOptions {
-        load_options: repocert::config::LoadOptions {
-            start_dir: None,
-            repo_root: args.repo_root,
-            config_path: args.config_path,
-        },
         commit: args.commit,
         profiles: args.profile,
         assert_certified: args.assert_certified,
     };
 
-    match run_status(options) {
+    let runtime =
+        match CommandRuntime::load("status", args.format, args.repo_root, args.config_path) {
+            Ok(runtime) => runtime,
+            Err(code) => return code,
+        };
+
+    match run_status(runtime.session(), options) {
         Ok(report) => {
-            match args.format {
-                OutputFormat::Human => render_human_success(&report),
-                OutputFormat::Json => render_json_success(&report),
+            match runtime.format() {
+                OutputFormat::Human => render_human_success(runtime.paths(), &report),
+                OutputFormat::Json => render_json_success(runtime.paths(), &report),
             }
 
             if report.ok() {
@@ -37,25 +39,19 @@ pub(super) fn run(args: StatusArgs) -> ExitCode {
                 ExitCode::from(1)
             }
         }
-        Err(error) => {
-            match args.format {
-                OutputFormat::Human => render_human_error(&error),
-                OutputFormat::Json => render_json_error(&error),
-            }
-            ExitCode::from(1)
-        }
+        Err(error) => runtime.fail(error_category(&error), &error.to_string(), None),
     }
 }
 
-fn render_human_success(report: &StatusReport) {
+fn render_human_success(paths: &LoadPaths, report: &StatusReport) {
     if report.assert_certified {
         let overall = if report.ok() { "PASS" } else { "FAIL" };
         println!("{overall} status");
     } else {
         println!("STATUS");
     }
-    println!("repo_root: {}", report.paths.repo_root.display());
-    println!("config_path: {}", report.paths.config_path.display());
+    println!("repo_root: {}", paths.repo_root.display());
+    println!("config_path: {}", paths.config_path.display());
     println!("commit: {}", report.commit);
     println!(
         "contract_fingerprint: {}",
@@ -109,7 +105,7 @@ fn render_human_success(report: &StatusReport) {
     );
 }
 
-fn render_json_success(report: &StatusReport) {
+fn render_json_success(paths: &LoadPaths, report: &StatusReport) {
     let mut command_fields = Map::new();
     command_fields.insert("commit".to_string(), json!(report.commit));
     command_fields.insert(
@@ -153,26 +149,7 @@ fn render_json_success(report: &StatusReport) {
             "uncertified": report.summary.uncertified,
         }),
     );
-    let output = command_success("status", &report.paths, report.ok(), command_fields);
-    println!(
-        "{}",
-        serde_json::to_string(&output).expect("JSON serialization should succeed")
-    );
-}
-
-fn render_human_error(error: &StatusError) {
-    eprintln!("FAIL status [{}]", error_category(error));
-    eprintln!("{error}");
-}
-
-fn render_json_error(error: &StatusError) {
-    let output = command_error(
-        "status",
-        error.paths(),
-        error_category(error),
-        error.to_string(),
-        None,
-    );
+    let output = command_success("status", paths, report.ok(), command_fields);
     println!(
         "{}",
         serde_json::to_string(&output).expect("JSON serialization should succeed")
@@ -181,15 +158,10 @@ fn render_json_error(error: &StatusError) {
 
 fn error_category(error: &StatusError) -> &'static str {
     match error {
-        StatusError::Load(failure) => match &failure.error {
-            LoadError::Discovery(_) => "discovery",
-            LoadError::Parse(_) => "parse",
-            LoadError::Validation(_) => "validation",
-        },
-        StatusError::Selection { .. } => "selection",
-        StatusError::GitCheckout { .. } | StatusError::GitCommit { .. } => "git",
-        StatusError::Fingerprint { .. } => "fingerprint",
-        StatusError::Storage { .. } => "storage",
+        StatusError::Selection(_) => "selection",
+        StatusError::GitCheckout(_) | StatusError::GitCommit(_) => "git",
+        StatusError::Fingerprint(_) => "fingerprint",
+        StatusError::Storage(_) => "storage",
     }
 }
 

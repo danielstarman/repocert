@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 
-use crate::config::LoadOptions;
-
 /// Generated git hook entrypoints understood by `repocert`.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum GeneratedHook {
@@ -41,8 +39,6 @@ impl GeneratedHook {
 /// Options for generated hook installation.
 #[derive(Clone, Debug)]
 pub struct InstallHooksOptions {
-    /// Contract loading options for the target repository.
-    pub load_options: LoadOptions,
     /// Absolute path to the current `repocert` executable.
     pub executable_path: PathBuf,
 }
@@ -57,8 +53,6 @@ pub enum HookInstallMode {
 /// Result of a successful `install-hooks` run.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InstallHooksReport {
-    /// Resolved repository/config paths.
-    pub paths: crate::config::LoadPaths,
     /// Installed hook mode.
     pub mode: HookInstallMode,
     /// Effective `core.hooksPath` target after installation.

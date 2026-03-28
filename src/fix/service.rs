@@ -1,6 +1,6 @@
-use std::path::PathBuf;
+use std::path::Path;
 
-use crate::config::load_contract;
+use crate::config::RepoSession;
 
 use super::error::FixError;
 use super::execute::{protected_roots, run_planned_fixer};
@@ -8,24 +8,17 @@ use super::plan::{FixPlan, build_fix_plan};
 use super::types::{FixItemResult, FixOptions, FixOutcome, FixReport, FixSummary};
 
 /// Run mutating fixers for a selected profile or explicit fixer list.
-pub fn run_fix(options: FixOptions) -> Result<FixReport, FixError> {
+pub fn run_fix(session: &RepoSession, options: FixOptions) -> Result<FixReport, FixError> {
     let FixOptions {
-        load_options,
         profile,
         names,
         emit_progress,
     } = options;
 
-    let loaded = load_contract(load_options)?;
-    let plan = build_fix_plan(&loaded.contract, &profile, &names).map_err(|error| {
-        FixError::Selection {
-            paths: loaded.paths.clone(),
-            error,
-        }
-    })?;
-    let protected_roots = protected_roots(&loaded.contract);
+    let plan = build_fix_plan(&session.contract, &profile, &names)?;
+    let protected_roots = protected_roots(&session.contract);
     let results = execute_plan(
-        &loaded.paths.repo_root,
+        &session.paths.repo_root,
         &plan,
         &protected_roots,
         emit_progress,
@@ -33,7 +26,6 @@ pub fn run_fix(options: FixOptions) -> Result<FixReport, FixError> {
     let summary = summarize(&results);
 
     Ok(FixReport {
-        paths: loaded.paths,
         selection_mode: plan.selection_mode,
         profile: plan.profile,
         fixers: plan.fixers,
@@ -43,7 +35,7 @@ pub fn run_fix(options: FixOptions) -> Result<FixReport, FixError> {
 }
 
 fn execute_plan(
-    repo_root: &PathBuf,
+    repo_root: &Path,
     plan: &FixPlan,
     protected_roots: &[String],
     emit_progress: bool,

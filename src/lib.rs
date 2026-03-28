@@ -30,8 +30,12 @@
 //!
 //! ## Typical embedded flow
 //!
-//! Most integrations start with a validated contract from [`config::load_contract`],
-//! then call one of the command-style entrypoints:
+//! Most integrations start by resolving and loading a repository session:
+//!
+//! - [`config::resolve_paths`]
+//! - [`config::load_repo_session`]
+//!
+//! Then call one of the command-style entrypoints with that [`config::RepoSession`]:
 //!
 //! - [`check::run_check`]
 //! - [`fix::run_fix`]

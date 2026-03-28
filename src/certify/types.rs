@@ -1,12 +1,9 @@
 use crate::certification::ContractFingerprint;
-use crate::config::{LoadOptions, LoadPaths};
 use std::path::PathBuf;
 
 /// Options for running `repocert certify`.
 #[derive(Clone, Debug, Default)]
 pub struct CertifyOptions {
-    /// Contract loading options for the target repository.
-    pub load_options: LoadOptions,
     /// Certification-eligible profile names to run.
     pub profiles: Vec<String>,
     /// Local public-key path used for SSH-backed certification signing.
@@ -100,8 +97,6 @@ pub struct CertifySummary {
 /// Full result of running `repocert certify`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CertifyReport {
-    /// Resolved repository/config paths.
-    pub paths: LoadPaths,
     /// Certified commit SHA.
     pub commit: String,
     /// Contract fingerprint used for certification.

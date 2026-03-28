@@ -1,6 +1,6 @@
 use std::error::Error as StdError;
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::string::FromUtf8Error;
 
 use thiserror::Error;
@@ -105,14 +105,14 @@ pub enum ParseError {
 
 impl ParseError {
     /// Build a TOML parse error with resolved line/column information.
-    pub fn from_toml(path: &PathBuf, content: &str, source: toml::de::Error) -> Self {
+    pub fn from_toml(path: &Path, content: &str, source: toml::de::Error) -> Self {
         let (line, column) = source
             .span()
             .map(|span| offset_to_line_column(content, span.start))
             .map_or((None, None), |(line, column)| (Some(line), Some(column)));
 
         Self::InvalidToml {
-            path: path.clone(),
+            path: path.to_path_buf(),
             message: source.to_string(),
             line,
             column,

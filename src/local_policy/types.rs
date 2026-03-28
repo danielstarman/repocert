@@ -1,12 +1,3 @@
-use crate::config::{LoadOptions, LoadPaths};
-
-/// Options for checking local protected-branch policy in a checkout.
-#[derive(Clone, Debug)]
-pub struct LocalPolicyOptions {
-    /// Contract loading options for the target repository.
-    pub load_options: LoadOptions,
-}
-
 /// One local policy violation found in the current checkout.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LocalPolicyViolation {
@@ -27,8 +18,6 @@ pub enum LocalPolicyViolation {
 /// Result of checking local policy against the current checkout.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalPolicyDecision {
-    /// Resolved repository/config paths.
-    pub paths: LoadPaths,
     /// Current symbolic ref, when one is available.
     pub current_ref: Option<String>,
     /// Whether the current checkout is the repository's primary checkout.

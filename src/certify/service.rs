@@ -1,8 +1,10 @@
+use std::path::Path;
+
 use crate::certification::{
     CertificationKey, CertificationPayload, CertificationStore, compute_contract_fingerprint,
     sign_payload_with_ssh, verify_payload_with_ssh,
 };
-use crate::config::{CertificationConfig, CertificationMode, load_contract};
+use crate::config::{CertificationConfig, CertificationMode, RepoSession};
 use crate::contract::{
     EvaluationItemKind, EvaluationItemResult, EvaluationOutcome, build_profile_evaluation_plan,
     progress_label, resolve_profiles, run_evaluation_item,
@@ -16,77 +18,52 @@ use super::types::{
 };
 
 /// Certify the current `HEAD` commit for one or more certification-eligible profiles.
-pub fn run_certify(options: CertifyOptions) -> Result<CertifyReport, CertifyError> {
+pub fn run_certify(
+    session: &RepoSession,
+    options: CertifyOptions,
+) -> Result<CertifyReport, CertifyError> {
     let CertifyOptions {
-        load_options,
         profiles,
         signing_key,
         emit_progress,
     } = options;
 
-    let loaded = load_contract(load_options)?;
     let selected_profiles =
-        resolve_profiles(&loaded.contract, &profiles).map_err(|error| CertifyError::Selection {
-            paths: loaded.paths.clone(),
-            error: error.into(),
-        })?;
-    validate_certifiable_profiles(&loaded.contract, &loaded.paths, &selected_profiles)?;
+        resolve_profiles(&session.contract, &profiles).map_err(CertifySelectionError::from)?;
+    validate_certifiable_profiles(&session.contract, &selected_profiles)?;
 
-    let worktree = capture_worktree_snapshot(&loaded.paths.repo_root).map_err(|error| {
-        CertifyError::GitStatus {
-            paths: loaded.paths.clone(),
-            error,
-        }
-    })?;
+    let worktree = capture_worktree_snapshot(&session.paths.repo_root)?;
     if !worktree.is_clean() {
         return Err(CertifyError::DirtyWorktree {
-            paths: loaded.paths.clone(),
             dirty_paths: worktree.paths().join(", "),
         });
     }
 
-    let commit =
-        resolve_head_commit(&loaded.paths.repo_root).map_err(|error| CertifyError::GitCommit {
-            paths: loaded.paths.clone(),
-            error,
-        })?;
-    let contract_fingerprint =
-        compute_contract_fingerprint(&loaded).map_err(|error| CertifyError::Fingerprint {
-            paths: loaded.paths.clone(),
-            error,
-        })?;
+    let commit = resolve_head_commit(&session.paths.repo_root)?;
+    let contract_fingerprint = compute_contract_fingerprint(session)?;
     let CertificationConfig {
         mode: certification_mode,
-    } = loaded
+    } = session
         .contract
         .certification
         .as_ref()
         .expect("certification-eligible profiles require certification config");
-    let signing_key = signing_key.ok_or_else(|| CertifyError::MissingSigningKeySelection {
-        paths: loaded.paths.clone(),
-    })?;
-    let store = CertificationStore::open(&loaded.paths.repo_root).map_err(|error| {
-        CertifyError::Storage {
-            paths: loaded.paths.clone(),
-            error,
-        }
-    })?;
+    let signing_key = signing_key.ok_or(CertifyError::MissingSigningKeySelection)?;
+    let store = CertificationStore::open(&session.paths.repo_root)?;
 
-    let profile_results = execute_profiles(
-        &loaded.paths,
-        &loaded.contract,
-        &store,
-        &commit,
-        &contract_fingerprint,
+    let context = CertifyExecutionContext {
+        session,
+        store: &store,
+        commit: &commit,
+        contract_fingerprint: &contract_fingerprint,
         certification_mode,
-        &signing_key,
-        &selected_profiles,
+        signing_key: &signing_key,
         emit_progress,
-    )?;
+    };
+    let profile_results = execute_profiles(&context, &selected_profiles)?;
     let summary = summarize(&profile_results);
 
     Ok(CertifyReport {
-        paths: loaded.paths,
         commit,
         contract_fingerprint,
         profiles: selected_profiles,
@@ -97,7 +74,6 @@ pub fn run_certify(options: CertifyOptions) -> Result<CertifyReport, CertifyErro
 
 fn validate_certifiable_profiles(
     contract: &crate::config::Contract,
-    paths: &crate::config::LoadPaths,
     selected_profiles: &[String],
 ) -> Result<(), CertifyError> {
     let non_certifiable = selected_profiles
@@ -115,32 +91,32 @@ fn validate_certifiable_profiles(
     if non_certifiable.is_empty() {
         Ok(())
     } else {
-        Err(CertifyError::Selection {
-            paths: paths.clone(),
-            error: CertifySelectionError::NonCertifiableProfiles(non_certifiable.join(", ")),
-        })
+        Err(CertifySelectionError::NonCertifiableProfiles(non_certifiable.join(", ")).into())
     }
 }
 
-fn execute_profiles(
-    paths: &crate::config::LoadPaths,
-    contract: &crate::config::Contract,
-    store: &CertificationStore,
-    commit: &str,
-    contract_fingerprint: &crate::certification::ContractFingerprint,
-    certification_mode: &CertificationMode,
-    signing_key: &std::path::PathBuf,
-    selected_profiles: &[String],
+struct CertifyExecutionContext<'a> {
+    session: &'a RepoSession,
+    store: &'a CertificationStore,
+    commit: &'a str,
+    contract_fingerprint: &'a crate::certification::ContractFingerprint,
+    certification_mode: &'a CertificationMode,
+    signing_key: &'a Path,
     emit_progress: bool,
+}
+
+fn execute_profiles(
+    context: &CertifyExecutionContext<'_>,
+    selected_profiles: &[String],
 ) -> Result<Vec<CertifyProfileResult>, CertifyError> {
     let mut results = Vec::new();
 
     for profile in selected_profiles {
-        let plan = build_profile_evaluation_plan(contract, profile);
+        let plan = build_profile_evaluation_plan(&context.session.contract, profile);
         let mut item_results = Vec::new();
 
         for item in &plan.items {
-            if emit_progress {
+            if context.emit_progress {
                 eprintln!(
                     "RUN {} {} [{}]",
                     progress_label(&item.kind),
@@ -148,43 +124,43 @@ fn execute_profiles(
                     plan.profile
                 );
             }
-            item_results.push(map_item_result(run_evaluation_item(&paths.repo_root, item)));
+            item_results.push(map_item_result(run_evaluation_item(
+                &context.session.paths.repo_root,
+                item,
+            )));
         }
 
         let outcome = summarize_profile_outcome(&item_results);
         let record_written = if outcome == CertifyProfileOutcome::Certified {
             let payload = CertificationPayload {
                 key: CertificationKey {
-                    commit: commit.to_string(),
+                    commit: context.commit.to_string(),
                     profile: plan.profile.clone(),
                 },
-                contract_fingerprint: contract_fingerprint.clone(),
+                contract_fingerprint: context.contract_fingerprint.clone(),
             };
-            let record = match certification_mode {
+            let record = match context.certification_mode {
                 CertificationMode::SshSigned { trusted_signer } => {
-                    let record = sign_payload_with_ssh(signing_key, &payload).map_err(|error| {
-                        CertifyError::Signing {
-                            paths: paths.clone(),
-                            signing_key: signing_key.clone(),
-                            error,
-                        }
-                    })?;
+                    let record =
+                        sign_payload_with_ssh(context.signing_key, &payload).map_err(|error| {
+                            CertifyError::Signing {
+                                signing_key: context.signing_key.to_path_buf(),
+                                error,
+                            }
+                        })?;
                     verify_payload_with_ssh(&record, trusted_signer).map_err(|error| {
                         CertifyError::Signing {
-                            paths: paths.clone(),
-                            signing_key: signing_key.clone(),
+                            signing_key: context.signing_key.to_path_buf(),
                             error,
                         }
                     })?;
                     record
                 }
             };
-            store
+            context
+                .store
                 .write(&record)
-                .map_err(|error| CertifyError::Storage {
-                    paths: paths.clone(),
-                    error,
-                })?;
+                .map_err(CertifyError::Storage)?;
             true
         } else {
             false

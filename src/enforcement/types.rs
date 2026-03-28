@@ -1,11 +1,8 @@
 use crate::certification::ContractFingerprint;
-use crate::config::LoadOptions;
 
 /// Options for authorizing one proposed ref update.
 #[derive(Clone, Debug)]
 pub struct AuthorizeOptions {
-    /// Contract loading options for the target repository.
-    pub load_options: LoadOptions,
     /// Old object id from the ref update request.
     pub old: String,
     /// New object id from the ref update request.
@@ -57,8 +54,6 @@ pub struct AuthorizeProfileResult {
 /// Full decision for one attempted ref update.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AuthorizeReport {
-    /// Resolved repository/config paths.
-    pub paths: crate::config::LoadPaths,
     /// Old object id from the input request.
     pub old: String,
     /// New object id from the input request.

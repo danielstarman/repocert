@@ -2,29 +2,30 @@ use std::process::ExitCode;
 
 use serde_json::{Map, Value, json};
 
-use repocert::config::LoadError;
+use repocert::config::LoadPaths;
 use repocert::fix::{FixError, FixOptions, FixOutcome, FixReport, FixSelectionMode, run_fix};
 
 use super::app::{FixArgs, OutputFormat};
-use super::json::{command_error, command_success, execution_result};
+use super::json::{command_success, execution_result};
+use super::session::CommandRuntime;
 
 pub(super) fn run(args: FixArgs) -> ExitCode {
     let options = FixOptions {
-        load_options: repocert::config::LoadOptions {
-            start_dir: None,
-            repo_root: args.repo_root,
-            config_path: args.config_path,
-        },
         profile: args.profile,
         names: args.name,
         emit_progress: true,
     };
 
-    match run_fix(options) {
+    let runtime = match CommandRuntime::load("fix", args.format, args.repo_root, args.config_path) {
+        Ok(runtime) => runtime,
+        Err(code) => return code,
+    };
+
+    match run_fix(runtime.session(), options) {
         Ok(report) => {
-            match args.format {
-                OutputFormat::Human => render_human_success(&report),
-                OutputFormat::Json => render_json_success(&report),
+            match runtime.format() {
+                OutputFormat::Human => render_human_success(runtime.paths(), &report),
+                OutputFormat::Json => render_json_success(runtime.paths(), &report),
             }
 
             if report.ok() {
@@ -33,21 +34,15 @@ pub(super) fn run(args: FixArgs) -> ExitCode {
                 ExitCode::from(1)
             }
         }
-        Err(error) => {
-            match args.format {
-                OutputFormat::Human => render_human_error(&error),
-                OutputFormat::Json => render_json_error(&error),
-            }
-            ExitCode::from(1)
-        }
+        Err(error) => runtime.fail(error_category(&error), &error.to_string(), None),
     }
 }
 
-fn render_human_success(report: &FixReport) {
+fn render_human_success(paths: &LoadPaths, report: &FixReport) {
     let overall = if report.ok() { "PASS" } else { "FAIL" };
     println!("{overall} fix");
-    println!("repo_root: {}", report.paths.repo_root.display());
-    println!("config_path: {}", report.paths.config_path.display());
+    println!("repo_root: {}", paths.repo_root.display());
+    println!("config_path: {}", paths.config_path.display());
     println!(
         "selection_mode: {}",
         selection_mode_label(&report.selection_mode)
@@ -80,7 +75,7 @@ fn render_human_success(report: &FixReport) {
     );
 }
 
-fn render_json_success(report: &FixReport) {
+fn render_json_success(paths: &LoadPaths, report: &FixReport) {
     let mut command_fields = Map::new();
     command_fields.insert(
         "selection_mode".to_string(),
@@ -116,26 +111,7 @@ fn render_json_success(report: &FixReport) {
             "timeout": report.summary.timeout,
         }),
     );
-    let output = command_success("fix", &report.paths, report.ok(), command_fields);
-    println!(
-        "{}",
-        serde_json::to_string(&output).expect("JSON serialization should succeed")
-    );
-}
-
-fn render_human_error(error: &FixError) {
-    eprintln!("FAIL fix [{}]", error_category(error));
-    eprintln!("{error}");
-}
-
-fn render_json_error(error: &FixError) {
-    let output = command_error(
-        "fix",
-        error.paths(),
-        error_category(error),
-        error.to_string(),
-        None,
-    );
+    let output = command_success("fix", paths, report.ok(), command_fields);
     println!(
         "{}",
         serde_json::to_string(&output).expect("JSON serialization should succeed")
@@ -144,12 +120,7 @@ fn render_json_error(error: &FixError) {
 
 fn error_category(error: &FixError) -> &'static str {
     match error {
-        FixError::Load(failure) => match &failure.error {
-            LoadError::Discovery(_) => "discovery",
-            LoadError::Parse(_) => "parse",
-            LoadError::Validation(_) => "validation",
-        },
-        FixError::Selection { .. } => "selection",
+        FixError::Selection(_) => "selection",
     }
 }
 

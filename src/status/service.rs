@@ -1,8 +1,8 @@
 use crate::certification::{
-    CertificationStore, ProfileCertificationError, ProfileCertificationState,
-    compute_contract_fingerprint, inspect_profile_certification,
+    CertificationStore, ProfileCertificationState, compute_contract_fingerprint,
+    inspect_profile_certification,
 };
-use crate::config::load_contract;
+use crate::config::RepoSession;
 use crate::contract::matches_pattern;
 use crate::git::inspect_checkout;
 use crate::git::{resolve_commit, resolve_head_commit};
@@ -14,61 +14,34 @@ use super::types::{
 };
 
 /// Inspect certification state for a commit and any matching protected refs.
-pub fn run_status(options: StatusOptions) -> Result<StatusReport, StatusError> {
+pub fn run_status(
+    session: &RepoSession,
+    options: StatusOptions,
+) -> Result<StatusReport, StatusError> {
     let StatusOptions {
-        load_options,
         commit,
         profiles,
         assert_certified,
     } = options;
 
-    let loaded = load_contract(load_options)?;
     let current_ref = if assert_certified && profiles.is_empty() && commit.is_none() {
-        inspect_checkout(&loaded.paths.repo_root)
-            .map_err(|error| StatusError::GitCheckout {
-                paths: loaded.paths.clone(),
-                error,
-            })?
-            .head_ref
+        inspect_checkout(&session.paths.repo_root)?.head_ref
     } else {
         None
     };
     let selected_profiles = resolve_status_profiles(
-        &loaded.contract,
+        &session.contract,
         &profiles,
         assert_certified,
         current_ref.as_deref(),
-    )
-    .map_err(|error| StatusError::Selection {
-        paths: loaded.paths.clone(),
-        error,
-    })?;
+    )?;
     let commit = match commit {
-        Some(commit) => resolve_commit(&loaded.paths.repo_root, &commit).map_err(|error| {
-            StatusError::GitCommit {
-                paths: loaded.paths.clone(),
-                error,
-            }
-        })?,
-        None => resolve_head_commit(&loaded.paths.repo_root).map_err(|error| {
-            StatusError::GitCommit {
-                paths: loaded.paths.clone(),
-                error,
-            }
-        })?,
+        Some(commit) => resolve_commit(&session.paths.repo_root, &commit)?,
+        None => resolve_head_commit(&session.paths.repo_root)?,
     };
-    let contract_fingerprint =
-        compute_contract_fingerprint(&loaded).map_err(|error| StatusError::Fingerprint {
-            paths: loaded.paths.clone(),
-            error,
-        })?;
-    let store = CertificationStore::open(&loaded.paths.repo_root).map_err(|error| {
-        StatusError::Storage {
-            paths: loaded.paths.clone(),
-            error,
-        }
-    })?;
-    let certification = loaded.contract.certification.as_ref();
+    let contract_fingerprint = compute_contract_fingerprint(session)?;
+    let store = CertificationStore::open(&session.paths.repo_root)?;
+    let certification = session.contract.certification.as_ref();
 
     let profile_results = selected_profiles
         .iter()
@@ -78,7 +51,7 @@ pub fn run_status(options: StatusOptions) -> Result<StatusReport, StatusError> {
                 .expect("certification-eligible profiles require certification config");
             inspect_profile_certification(
                 &store,
-                &loaded.paths.repo_root,
+                &session.paths.repo_root,
                 &commit,
                 profile,
                 &contract_fingerprint,
@@ -91,19 +64,10 @@ pub fn run_status(options: StatusOptions) -> Result<StatusReport, StatusError> {
                 other_certified_commits: inspection.other_certified_commits,
                 recorded_fingerprint: inspection.recorded_fingerprint,
             })
-            .map_err(|error| match error {
-                ProfileCertificationError::Storage(error) => StatusError::Storage {
-                    paths: loaded.paths.clone(),
-                    error,
-                },
-                ProfileCertificationError::GitCommit(error) => StatusError::GitCommit {
-                    paths: loaded.paths.clone(),
-                    error,
-                },
-            })
+            .map_err(StatusError::from)
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let protected_refs = loaded
+    let protected_refs = session
         .contract
         .protected_refs
         .iter()
@@ -120,7 +84,6 @@ pub fn run_status(options: StatusOptions) -> Result<StatusReport, StatusError> {
     let summary = summarize(&profile_results);
 
     Ok(StatusReport {
-        paths: loaded.paths,
         commit,
         contract_fingerprint,
         profiles: selected_profiles,
@@ -149,9 +112,8 @@ fn resolve_status_profiles(
                 .collect::<Vec<_>>()
         }
     } else {
-        let profiles = crate::contract::resolve_profiles(contract, requested_profiles)
-            .map_err(StatusSelectionError::from)?;
-        profiles
+        crate::contract::resolve_profiles(contract, requested_profiles)
+            .map_err(StatusSelectionError::from)?
     };
 
     let non_certifiable = profiles

@@ -1,7 +1,7 @@
-use repocert::config::{LoadError, LoadOptions, load_contract};
+use repocert::config::{LoadError, LoadOptions};
 use tempfile::TempDir;
 
-use crate::write_repo_file;
+use crate::{load_contract, write_repo_file};
 
 #[test]
 fn load_contract_relative_protected_path_returns_normalized_repo_path() {
@@ -22,7 +22,7 @@ protected_paths = ["./docs/./spec.md"]
     // Assert
     assert!(
         loaded
-            .contract
+            .contract()
             .declared_protected_paths
             .iter()
             .any(|path| path.as_str() == "docs/spec.md")
@@ -46,7 +46,7 @@ protected_paths = ["../outside.txt"]
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
     // Assert
-    match error.error {
+    match error.error() {
         LoadError::Validation(errors) => assert!(errors.to_string().contains("escape")),
         other => panic!("unexpected error: {other:?}"),
     }

@@ -5,11 +5,11 @@ use repocert::certification::{
     CertificationKey, CertificationPayload, CertificationRecord, CertificationStore,
     ContractFingerprint, compute_contract_fingerprint, sign_payload_with_ssh,
 };
-use repocert::config::{LoadOptions, load_contract};
+use repocert::config::LoadOptions;
 use serde_json::Value;
 use tempfile::TempDir;
 
-use crate::{commit_all, init_git_repo, write_repo_file};
+use crate::{commit_all, init_git_repo, load_contract, write_repo_file};
 
 fn repocert_bin() -> &'static str {
     env!("CARGO_BIN_EXE_repocert")
@@ -742,8 +742,7 @@ fn current_contract_fingerprint(repo: &TempDir) -> ContractFingerprint {
         start_dir: None,
         repo_root: Some(repo.path().to_path_buf()),
         config_path: None,
-    })
-    .unwrap();
+    });
     compute_contract_fingerprint(&loaded).unwrap()
 }
 

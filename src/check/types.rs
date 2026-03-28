@@ -1,10 +1,6 @@
-use crate::config::{LoadOptions, LoadPaths};
-
 /// Options for running `repocert check`.
 #[derive(Clone, Debug, Default)]
 pub struct CheckOptions {
-    /// Contract loading options for the target repository.
-    pub load_options: LoadOptions,
     /// Profile names to evaluate.
     pub profiles: Vec<String>,
     /// Direct named checks to evaluate instead of profiles.
@@ -79,8 +75,6 @@ pub struct CheckSummary {
 /// Full result of running `repocert check`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CheckReport {
-    /// Resolved repository/config paths.
-    pub paths: LoadPaths,
     /// How the checks were selected.
     pub selection_mode: CheckSelectionMode,
     /// Evaluated profile names.

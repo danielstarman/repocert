@@ -115,11 +115,11 @@ fn parse_porcelain_v1_z(output: &[u8]) -> GitWorktreeSnapshot {
         let path = String::from_utf8_lossy(&field[3..]).into_owned();
         entries.insert(path, status.clone());
 
-        if status.contains('R') || status.contains('C') {
-            if let Some(secondary) = fields.next() {
-                let path = String::from_utf8_lossy(secondary).into_owned();
-                entries.insert(path, status.clone());
-            }
+        if (status.contains('R') || status.contains('C'))
+            && let Some(secondary) = fields.next()
+        {
+            let path = String::from_utf8_lossy(secondary).into_owned();
+            entries.insert(path, status.clone());
         }
     }
 

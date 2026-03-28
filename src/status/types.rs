@@ -1,11 +1,8 @@
 use crate::certification::ContractFingerprint;
-use crate::config::{LoadOptions, LoadPaths};
 
 /// Options for running `repocert status`.
 #[derive(Clone, Debug, Default)]
 pub struct StatusOptions {
-    /// Contract loading options for the target repository.
-    pub load_options: LoadOptions,
     /// Optional explicit commit to inspect instead of `HEAD`.
     pub commit: Option<String>,
     /// Optional profile names to inspect.
@@ -82,8 +79,6 @@ pub struct StatusSummary {
 /// Full result of running `repocert status`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StatusReport {
-    /// Resolved repository/config paths.
-    pub paths: LoadPaths,
     /// Inspected commit SHA.
     pub commit: String,
     /// Current contract fingerprint.

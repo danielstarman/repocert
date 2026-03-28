@@ -1,4 +1,4 @@
-use repocert::config::{HookMode, LoadError, LoadOptions, load_contract};
+use repocert::config::{HookMode, LoadError, LoadOptions};
 use tempfile::TempDir;
 
 #[cfg(unix)]
@@ -6,7 +6,7 @@ use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs as unix_fs;
 
-use crate::write_repo_file;
+use crate::{load_contract, write_repo_file};
 
 const TEST_PUBLIC_KEY: &str =
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJR06amC2Q8j79KKQ4ZHQv6ux8R7L/uL4BlrEGnMHo3l test@example";
@@ -75,18 +75,24 @@ mode = "generated"
         load_contract(LoadOptions::discover_from(repo.path().join("nested/work"))).unwrap();
 
     // Assert
-    assert_eq!(loaded.paths.repo_root, repo.path().canonicalize().unwrap());
     assert_eq!(
-        loaded.paths.config_path,
+        loaded.paths().repo_root,
+        repo.path().canonicalize().unwrap()
+    );
+    assert_eq!(
+        loaded.paths().config_path,
         repo.path()
             .join(".repocert/config.toml")
             .canonicalize()
             .unwrap()
     );
-    assert_eq!(loaded.contract.default_profile.as_deref(), Some("release"));
+    assert_eq!(
+        loaded.contract().default_profile.as_deref(),
+        Some("release")
+    );
     assert_eq!(
         loaded
-            .contract
+            .contract()
             .profiles
             .get("release")
             .unwrap()
@@ -95,13 +101,13 @@ mode = "generated"
     );
     assert!(
         loaded
-            .contract
+            .contract()
             .declared_protected_paths
             .iter()
             .any(|path| path.as_str() == "README.md")
     );
     assert_eq!(
-        loaded.contract.hooks.as_ref().unwrap().mode,
+        loaded.contract().hooks.as_ref().unwrap().mode,
         HookMode::Generated
     );
 }
@@ -115,7 +121,7 @@ fn load_contract_repo_root_without_default_config_returns_discovery_error() {
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
     // Assert
-    match error.error {
+    match error.error() {
         LoadError::Discovery(error) => {
             let message = error.to_string();
             assert!(message.contains(".repocert/config.toml"));
@@ -141,7 +147,7 @@ fn load_contract_mismatched_repo_root_and_config_path_returns_discovery_error() 
     .unwrap_err();
 
     // Assert
-    match error.error {
+    match error.error() {
         LoadError::Discovery(error) => {
             assert!(error.to_string().contains("do not match"));
         }
@@ -177,9 +183,9 @@ fn load_contract_symlinked_config_returns_canonical_path_in_all_modes() {
         .join(".repocert/real-config.toml")
         .canonicalize()
         .unwrap();
-    assert_eq!(from_repo_root.paths.config_path, canonical_target);
-    assert_eq!(from_config_path.paths.config_path, canonical_target);
-    assert_eq!(from_discovery.paths.config_path, canonical_target);
+    assert_eq!(from_repo_root.paths().config_path, canonical_target);
+    assert_eq!(from_config_path.paths().config_path, canonical_target);
+    assert_eq!(from_discovery.paths().config_path, canonical_target);
 }
 
 #[test]
@@ -193,17 +199,17 @@ fn load_contract_invalid_schema_version_returns_validation_error() {
 
     // Assert
     assert_eq!(
-        error.paths.as_ref().unwrap().repo_root,
+        error.paths().unwrap().repo_root,
         repo.path().canonicalize().unwrap()
     );
     assert_eq!(
-        error.paths.as_ref().unwrap().config_path,
+        error.paths().unwrap().config_path,
         repo.path()
             .join(".repocert/config.toml")
             .canonicalize()
             .unwrap()
     );
-    match error.error {
+    match error.error() {
         LoadError::Validation(errors) => {
             assert!(errors.to_string().contains("schema_version"));
         }
@@ -242,7 +248,7 @@ checks = ["test"]
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
     // Assert
-    match error.error {
+    match error.error() {
         LoadError::Validation(errors) => {
             assert!(errors.to_string().contains("profile include cycle"));
         }
@@ -281,7 +287,7 @@ certify = true
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
     // Assert
-    match error.error {
+    match error.error() {
         LoadError::Validation(errors) => assert!(errors.to_string().contains("probe_argv")),
         other => panic!("unexpected error: {other:?}"),
     }
@@ -307,7 +313,7 @@ require_clean_primary_checkout = true
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
     // Assert
-    match error.error {
+    match error.error() {
         LoadError::Validation(errors) => {
             assert!(errors.to_string().contains("requires hooks configuration"));
         }
@@ -338,7 +344,7 @@ mode = "generated"
     let loaded = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap();
 
     // Assert
-    let local_policy = loaded.contract.local_policy.as_ref().unwrap();
+    let local_policy = loaded.contract().local_policy.as_ref().unwrap();
     assert_eq!(
         local_policy.protected_branches,
         vec!["refs/heads/main".to_string()]
@@ -362,7 +368,7 @@ mode = "generated"
 
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
-    match error.error {
+    match error.error() {
         LoadError::Validation(errors) => {
             assert!(
                 errors
@@ -394,7 +400,7 @@ public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJR06amC2Q8j79KKQ4ZHQv6ux8R7L/
 
     let loaded = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap();
 
-    match &loaded.contract.certification.as_ref().unwrap().mode {
+    match &loaded.contract().certification.as_ref().unwrap().mode {
         repocert::config::CertificationMode::SshSigned { trusted_signer } => {
             assert_eq!(trusted_signer.len(), 1);
             assert_eq!(trusted_signer[0].name, "test");
@@ -418,7 +424,7 @@ mode = "ssh-signed"
 
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
-    match error.error {
+    match error.error() {
         LoadError::Validation(errors) => {
             assert!(
                 errors
@@ -450,7 +456,7 @@ certify = true
 
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
-    match error.error {
+    match error.error() {
         LoadError::Validation(errors) => {
             assert!(
                 errors
@@ -478,7 +484,7 @@ mode = "repo-owned"
 
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
-    match error.error {
+    match error.error() {
         LoadError::Validation(errors) => {
             assert!(errors.to_string().contains("unsupported hook mode"));
         }
@@ -505,7 +511,7 @@ path = ".repocert/hooks"
 
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
-    match error.error {
+    match error.error() {
         LoadError::Parse(error) => {
             assert!(error.to_string().contains("repo_owned"));
         }
@@ -539,7 +545,7 @@ profile = "dev"
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
     // Assert
-    match error.error {
+    match error.error() {
         LoadError::Validation(errors) => {
             assert!(
                 errors
@@ -575,7 +581,7 @@ path = ".repocert/hooks"
     let error = load_contract(LoadOptions::from_repo_root(repo.path())).unwrap_err();
 
     // Assert
-    match error.error {
+    match error.error() {
         LoadError::Parse(error) => {
             assert!(error.to_string().contains("repo_owned"));
         }

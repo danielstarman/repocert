@@ -2,32 +2,34 @@ use std::process::ExitCode;
 
 use serde_json::{Map, Value, json};
 
-use repocert::config::LoadError;
+use repocert::config::LoadPaths;
 use repocert::enforcement::{
     AuthorizeError, AuthorizeOptions, AuthorizeProfileResult, AuthorizeProfileState,
     AuthorizeReport, MatchedRule, authorize_ref_update,
 };
 
 use super::app::{AuthorizeArgs, OutputFormat};
-use super::json::{command_error, command_success, matched_rule_result, profile_state_result};
+use super::json::{command_success, matched_rule_result, profile_state_result};
+use super::session::CommandRuntime;
 
 pub(super) fn run(args: AuthorizeArgs) -> ExitCode {
     let options = AuthorizeOptions {
-        load_options: repocert::config::LoadOptions {
-            start_dir: None,
-            repo_root: args.repo_root,
-            config_path: args.config_path,
-        },
         old: args.old,
         new: args.new,
         reference: args.reference,
     };
 
-    match authorize_ref_update(options) {
+    let runtime =
+        match CommandRuntime::load("authorize", args.format, args.repo_root, args.config_path) {
+            Ok(runtime) => runtime,
+            Err(code) => return code,
+        };
+
+    match authorize_ref_update(runtime.session(), options) {
         Ok(report) => {
-            match args.format {
-                OutputFormat::Human => render_human_success(&report),
-                OutputFormat::Json => render_json_success(&report),
+            match runtime.format() {
+                OutputFormat::Human => render_human_success(runtime.paths(), &report),
+                OutputFormat::Json => render_json_success(runtime.paths(), &report),
             }
 
             if report.ok() {
@@ -36,21 +38,15 @@ pub(super) fn run(args: AuthorizeArgs) -> ExitCode {
                 ExitCode::from(1)
             }
         }
-        Err(error) => {
-            match args.format {
-                OutputFormat::Human => render_human_error(&error),
-                OutputFormat::Json => render_json_error(&error),
-            }
-            ExitCode::from(1)
-        }
+        Err(error) => runtime.fail(error_category(&error), &error.to_string(), None),
     }
 }
 
-fn render_human_success(report: &AuthorizeReport) {
+fn render_human_success(paths: &LoadPaths, report: &AuthorizeReport) {
     let overall = if report.allowed { "PASS" } else { "FAIL" };
     println!("{overall} authorize");
-    println!("repo_root: {}", report.paths.repo_root.display());
-    println!("config_path: {}", report.paths.config_path.display());
+    println!("repo_root: {}", paths.repo_root.display());
+    println!("config_path: {}", paths.config_path.display());
     println!("old: {}", report.old);
     println!("new: {}", report.new);
     println!("ref: {}", report.reference);
@@ -85,7 +81,7 @@ fn render_human_success(report: &AuthorizeReport) {
     println!("allowed: {}", report.allowed);
 }
 
-fn render_json_success(report: &AuthorizeReport) {
+fn render_json_success(paths: &LoadPaths, report: &AuthorizeReport) {
     let mut command_fields = Map::new();
     command_fields.insert("old".to_string(), json!(report.old));
     command_fields.insert("new".to_string(), json!(report.new));
@@ -120,26 +116,7 @@ fn render_json_success(report: &AuthorizeReport) {
         ),
     );
     command_fields.insert("allowed".to_string(), Value::Bool(report.allowed));
-    let output = command_success("authorize", &report.paths, report.ok(), command_fields);
-    println!(
-        "{}",
-        serde_json::to_string(&output).expect("JSON serialization should succeed")
-    );
-}
-
-fn render_human_error(error: &AuthorizeError) {
-    eprintln!("FAIL authorize [{}]", error_category(error));
-    eprintln!("{error}");
-}
-
-fn render_json_error(error: &AuthorizeError) {
-    let output = command_error(
-        "authorize",
-        error.paths(),
-        error_category(error),
-        error.to_string(),
-        None,
-    );
+    let output = command_success("authorize", paths, report.ok(), command_fields);
     println!(
         "{}",
         serde_json::to_string(&output).expect("JSON serialization should succeed")
@@ -148,15 +125,10 @@ fn render_json_error(error: &AuthorizeError) {
 
 fn error_category(error: &AuthorizeError) -> &'static str {
     match error {
-        AuthorizeError::Load(failure) => match &failure.error {
-            LoadError::Discovery(_) => "discovery",
-            LoadError::Parse(_) => "parse",
-            LoadError::Validation(_) => "validation",
-        },
-        AuthorizeError::UnsupportedDeletion { .. } => "input",
-        AuthorizeError::GitCommit { .. } => "git",
-        AuthorizeError::Fingerprint { .. } => "fingerprint",
-        AuthorizeError::Storage { .. } => "storage",
+        AuthorizeError::UnsupportedDeletion => "input",
+        AuthorizeError::GitCommit(_) => "git",
+        AuthorizeError::Fingerprint(_) => "fingerprint",
+        AuthorizeError::Storage(_) => "storage",
         AuthorizeError::InvalidPattern { .. } => "pattern",
     }
 }

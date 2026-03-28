@@ -6,28 +6,30 @@ use repocert::check::{
     CheckError, CheckItemKind, CheckOptions, CheckOutcome, CheckReport, CheckSelectionMode,
     run_check,
 };
-use repocert::config::LoadError;
+use repocert::config::LoadPaths;
 
 use super::app::{CheckArgs, OutputFormat};
-use super::json::{command_error, command_success, execution_result};
+use super::json::{command_success, execution_result};
+use super::session::CommandRuntime;
 
 pub(super) fn run(args: CheckArgs) -> ExitCode {
     let options = CheckOptions {
-        load_options: repocert::config::LoadOptions {
-            start_dir: None,
-            repo_root: args.repo_root,
-            config_path: args.config_path,
-        },
         profiles: args.profile,
         names: args.name,
         emit_progress: true,
     };
 
-    match run_check(options) {
+    let runtime = match CommandRuntime::load("check", args.format, args.repo_root, args.config_path)
+    {
+        Ok(runtime) => runtime,
+        Err(code) => return code,
+    };
+
+    match run_check(runtime.session(), options) {
         Ok(report) => {
-            match args.format {
-                OutputFormat::Human => render_human_success(&report),
-                OutputFormat::Json => render_json_success(&report),
+            match runtime.format() {
+                OutputFormat::Human => render_human_success(runtime.paths(), &report),
+                OutputFormat::Json => render_json_success(runtime.paths(), &report),
             }
 
             if report.ok() {
@@ -36,21 +38,15 @@ pub(super) fn run(args: CheckArgs) -> ExitCode {
                 ExitCode::from(1)
             }
         }
-        Err(error) => {
-            match args.format {
-                OutputFormat::Human => render_human_error(&error),
-                OutputFormat::Json => render_json_error(&error),
-            }
-            ExitCode::from(1)
-        }
+        Err(error) => runtime.fail(error_category(&error), &error.to_string(), None),
     }
 }
 
-fn render_human_success(report: &CheckReport) {
+fn render_human_success(paths: &LoadPaths, report: &CheckReport) {
     let overall = if report.ok() { "PASS" } else { "FAIL" };
     println!("{overall} check");
-    println!("repo_root: {}", report.paths.repo_root.display());
-    println!("config_path: {}", report.paths.config_path.display());
+    println!("repo_root: {}", paths.repo_root.display());
+    println!("config_path: {}", paths.config_path.display());
     println!(
         "selection_mode: {}",
         selection_mode_label(&report.selection_mode)
@@ -88,7 +84,7 @@ fn render_human_success(report: &CheckReport) {
     );
 }
 
-fn render_json_success(report: &CheckReport) {
+fn render_json_success(paths: &LoadPaths, report: &CheckReport) {
     let mut command_fields = Map::new();
     command_fields.insert(
         "selection_mode".to_string(),
@@ -126,26 +122,7 @@ fn render_json_success(report: &CheckReport) {
         }),
     );
 
-    let output = command_success("check", &report.paths, report.ok(), command_fields);
-    println!(
-        "{}",
-        serde_json::to_string(&output).expect("JSON serialization should succeed")
-    );
-}
-
-fn render_human_error(error: &CheckError) {
-    eprintln!("FAIL check [{}]", error_category(error));
-    eprintln!("{error}");
-}
-
-fn render_json_error(error: &CheckError) {
-    let output = command_error(
-        "check",
-        error.paths(),
-        error_category(error),
-        error.to_string(),
-        None,
-    );
+    let output = command_success("check", paths, report.ok(), command_fields);
     println!(
         "{}",
         serde_json::to_string(&output).expect("JSON serialization should succeed")
@@ -154,12 +131,7 @@ fn render_json_error(error: &CheckError) {
 
 fn error_category(error: &CheckError) -> &'static str {
     match error {
-        CheckError::Load(failure) => match &failure.error {
-            LoadError::Discovery(_) => "discovery",
-            LoadError::Parse(_) => "parse",
-            LoadError::Validation(_) => "validation",
-        },
-        CheckError::Selection { .. } => "selection",
+        CheckError::Selection(_) => "selection",
     }
 }
 

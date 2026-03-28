@@ -1,10 +1,10 @@
 use std::collections::BTreeSet;
 
 use crate::certification::{
-    CertificationStore, ProfileCertificationError, ProfileCertificationState,
-    compute_contract_fingerprint, inspect_profile_certification,
+    CertificationStore, ProfileCertificationState, compute_contract_fingerprint,
+    inspect_profile_certification,
 };
-use crate::config::load_contract;
+use crate::config::RepoSession;
 use crate::contract::matches_pattern;
 use crate::git::resolve_commit;
 
@@ -14,41 +14,26 @@ use super::types::{
 };
 
 /// Authorize a proposed ref update against the current contract and certification store.
-pub fn authorize_ref_update(options: AuthorizeOptions) -> Result<AuthorizeReport, AuthorizeError> {
+pub fn authorize_ref_update(
+    session: &RepoSession,
+    options: AuthorizeOptions,
+) -> Result<AuthorizeReport, AuthorizeError> {
     let AuthorizeOptions {
-        load_options,
         old,
         new,
         reference,
     } = options;
 
-    let loaded = load_contract(load_options)?;
     if is_zero_oid(&new) {
-        return Err(AuthorizeError::UnsupportedDeletion {
-            paths: loaded.paths.clone(),
-        });
+        return Err(AuthorizeError::UnsupportedDeletion);
     }
 
-    let target_commit = resolve_commit(&loaded.paths.repo_root, &new).map_err(|error| {
-        AuthorizeError::GitCommit {
-            paths: loaded.paths.clone(),
-            error,
-        }
-    })?;
-    let contract_fingerprint =
-        compute_contract_fingerprint(&loaded).map_err(|error| AuthorizeError::Fingerprint {
-            paths: loaded.paths.clone(),
-            error,
-        })?;
-    let store = CertificationStore::open(&loaded.paths.repo_root).map_err(|error| {
-        AuthorizeError::Storage {
-            paths: loaded.paths.clone(),
-            error,
-        }
-    })?;
-    let certification = loaded.contract.certification.as_ref();
+    let target_commit = resolve_commit(&session.paths.repo_root, &new)?;
+    let contract_fingerprint = compute_contract_fingerprint(session)?;
+    let store = CertificationStore::open(&session.paths.repo_root)?;
+    let certification = session.contract.certification.as_ref();
 
-    let matched_rules = loaded
+    let matched_rules = session
         .contract
         .protected_refs
         .iter()
@@ -59,7 +44,6 @@ pub fn authorize_ref_update(options: AuthorizeOptions) -> Result<AuthorizeReport
             })),
             Ok(false) => None,
             Err(message) => Some(Err(AuthorizeError::InvalidPattern {
-                paths: loaded.paths.clone(),
                 pattern: rule.pattern.clone(),
                 message,
             })),
@@ -75,7 +59,7 @@ pub fn authorize_ref_update(options: AuthorizeOptions) -> Result<AuthorizeReport
                 .expect("certification-eligible profiles require certification config");
             inspect_profile_certification(
                 &store,
-                &loaded.paths.repo_root,
+                &session.paths.repo_root,
                 &target_commit,
                 profile,
                 &contract_fingerprint,
@@ -86,16 +70,7 @@ pub fn authorize_ref_update(options: AuthorizeOptions) -> Result<AuthorizeReport
                 state: map_profile_state(inspection.state),
                 signer_name: inspection.signer_name,
             })
-            .map_err(|error| match error {
-                ProfileCertificationError::Storage(error) => AuthorizeError::Storage {
-                    paths: loaded.paths.clone(),
-                    error,
-                },
-                ProfileCertificationError::GitCommit(error) => AuthorizeError::GitCommit {
-                    paths: loaded.paths.clone(),
-                    error,
-                },
-            })
+            .map_err(AuthorizeError::from)
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -104,7 +79,6 @@ pub fn authorize_ref_update(options: AuthorizeOptions) -> Result<AuthorizeReport
         .all(|result| result.state == AuthorizeProfileState::Certified);
 
     Ok(AuthorizeReport {
-        paths: loaded.paths,
         old,
         new,
         reference,

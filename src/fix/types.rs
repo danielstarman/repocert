@@ -1,10 +1,6 @@
-use crate::config::{LoadOptions, LoadPaths};
-
 /// Options for running `repocert fix`.
 #[derive(Clone, Debug, Default)]
 pub struct FixOptions {
-    /// Contract loading options for the target repository.
-    pub load_options: LoadOptions,
     /// Optional profile whose fixers should be executed.
     pub profile: Option<String>,
     /// Direct named fixers to execute instead of a profile.
@@ -64,8 +60,6 @@ pub struct FixSummary {
 /// Full result of running `repocert fix`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FixReport {
-    /// Resolved repository/config paths.
-    pub paths: LoadPaths,
     /// How fixers were selected.
     pub selection_mode: FixSelectionMode,
     /// Selected profile name, when one was used.

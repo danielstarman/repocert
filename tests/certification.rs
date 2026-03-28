@@ -1,12 +1,18 @@
 use std::fs;
 use std::process::Command;
 
+use repocert::config::{LoadOptions, RepoSession, load_repo_session, resolve_paths};
 use tempfile::TempDir;
 
 #[path = "certification/fingerprint.rs"]
 mod certification_fingerprint;
 #[path = "certification/store.rs"]
 mod certification_store;
+
+pub(crate) fn load_contract(options: LoadOptions) -> RepoSession {
+    let paths = resolve_paths(options).unwrap();
+    load_repo_session(paths).unwrap()
+}
 
 pub(crate) fn write_repo_file(repo: &TempDir, relative_path: &str, contents: &str) {
     let path = repo.path().join(relative_path);

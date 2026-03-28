@@ -1,30 +1,19 @@
-use crate::config::load_contract;
+use crate::config::RepoSession;
 use crate::contract::matches_pattern;
 use crate::git::{capture_worktree_snapshot, inspect_checkout};
 
 use super::error::LocalPolicyError;
-use super::types::{LocalPolicyDecision, LocalPolicyOptions, LocalPolicyViolation};
+use super::types::{LocalPolicyDecision, LocalPolicyViolation};
 
 /// Check whether the current checkout satisfies the configured local policy.
 pub fn check_local_commit_policy(
-    options: LocalPolicyOptions,
+    session: &RepoSession,
 ) -> Result<LocalPolicyDecision, LocalPolicyError> {
-    let loaded = load_contract(options.load_options)?;
-    let checkout = inspect_checkout(&loaded.paths.repo_root).map_err(|error| {
-        LocalPolicyError::GitCheckout {
-            paths: loaded.paths.clone(),
-            error,
-        }
-    })?;
-    let snapshot = capture_worktree_snapshot(&loaded.paths.repo_root).map_err(|error| {
-        LocalPolicyError::GitWorktree {
-            paths: loaded.paths.clone(),
-            error,
-        }
-    })?;
+    let checkout = inspect_checkout(&session.paths.repo_root)?;
+    let snapshot = capture_worktree_snapshot(&session.paths.repo_root)?;
 
     let mut violations = Vec::new();
-    if let Some(policy) = loaded.contract.local_policy.as_ref() {
+    if let Some(policy) = session.contract.local_policy.as_ref() {
         if policy.require_clean_primary_checkout
             && checkout.is_primary_checkout
             && !snapshot.is_clean()
@@ -44,7 +33,6 @@ pub fn check_local_commit_policy(
                     Ok(false) => {}
                     Err(message) => {
                         return Err(LocalPolicyError::InvalidPattern {
-                            paths: loaded.paths.clone(),
                             pattern: pattern.clone(),
                             message,
                         });
@@ -55,7 +43,6 @@ pub fn check_local_commit_policy(
     }
 
     Ok(LocalPolicyDecision {
-        paths: loaded.paths,
         current_ref: checkout.head_ref,
         is_primary_checkout: checkout.is_primary_checkout,
         worktree_dirty: !snapshot.is_clean(),

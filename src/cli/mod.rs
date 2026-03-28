@@ -6,6 +6,7 @@ mod fix;
 mod hook;
 mod install_hooks;
 mod json;
+mod session;
 mod status;
 mod validate;
 
