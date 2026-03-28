@@ -5,7 +5,7 @@ mod hooks_path;
 mod worktree;
 
 pub(crate) use checkout::{GitCheckoutError, inspect_checkout};
-pub(crate) use commit::{GitCommitError, resolve_commit, resolve_head_commit};
+pub(crate) use commit::{GitCommitError, commit_exists, resolve_commit, resolve_head_commit};
 pub(crate) use common_dir::{
     GitCommonDirError, GitDirError, resolve_git_common_dir, resolve_git_dir,
 };

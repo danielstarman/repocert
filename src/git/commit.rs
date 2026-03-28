@@ -23,6 +23,33 @@ pub(crate) fn resolve_head_commit(repo_root: &Path) -> Result<String, GitCommitE
     resolve_commit(repo_root, "HEAD")
 }
 
+pub(crate) fn commit_exists(repo_root: &Path, target: &str) -> Result<bool, GitCommitError> {
+    let revision = format!("{target}^{{commit}}");
+    let output = Command::new("git")
+        .current_dir(repo_root)
+        .args(["rev-parse", "--verify", "--quiet"])
+        .arg(revision)
+        .output()
+        .map_err(|source| GitCommitError::Io { source })?;
+
+    if output.status.success() {
+        return Ok(true);
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let message = stderr.trim().to_string();
+    if message.is_empty() {
+        return Ok(false);
+    }
+    if message.contains("not a git repository") {
+        return Err(GitCommitError::NotGitRepository {
+            repo_root: repo_root.to_path_buf(),
+        });
+    }
+
+    Err(GitCommitError::CommandFailed { message })
+}
+
 pub(crate) fn resolve_commit(repo_root: &Path, target: &str) -> Result<String, GitCommitError> {
     let output = Command::new("git")
         .current_dir(repo_root)

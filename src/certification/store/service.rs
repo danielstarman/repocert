@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::Path;
 
 use crate::certification::{CertificationKey, CertificationRecord, StorageError};
@@ -69,5 +70,30 @@ impl CertificationStore {
         let mut entries = records::list_profile_records(&self.root_dir, profile)?;
         entries.sort_by(|left, right| left.key().commit.cmp(&right.key().commit));
         Ok(entries)
+    }
+
+    /// List commit ids represented by certification-store commit directories.
+    pub(crate) fn list_commit_ids(&self) -> Result<Vec<String>, StorageError> {
+        if !self.root_dir.exists() {
+            return Ok(Vec::new());
+        }
+
+        let mut entries = fs::read_dir(&self.root_dir)
+            .map_err(|source| StorageError::Io {
+                path: self.root_dir.clone(),
+                source,
+            })?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|source| StorageError::Io {
+                path: self.root_dir.clone(),
+                source,
+            })?;
+        entries.sort_by_key(|entry| entry.file_name());
+
+        Ok(entries
+            .into_iter()
+            .filter(|entry| entry.path().is_dir())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect())
     }
 }

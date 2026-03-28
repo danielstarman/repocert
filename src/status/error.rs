@@ -29,12 +29,12 @@ pub enum StatusError {
         #[source]
         error: GitCheckoutError,
     },
-    /// Resolving the commit to inspect failed.
+    /// Resolving the inspected commit or checking referenced commit objects failed.
     #[error("{error}")]
     GitCommit {
         /// Resolved repository/config paths.
         paths: LoadPaths,
-        /// Underlying git commit resolution error.
+        /// Underlying git commit lookup error.
         #[source]
         error: GitCommitError,
     },

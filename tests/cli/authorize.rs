@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use repocert::certification::{CertificationKey, CertificationPayload, CertificationStore};
 use serde_json::Value;
 use tempfile::TempDir;
 
@@ -203,6 +204,77 @@ profile = "release"
     assert_eq!(json["allowed"], true);
     assert_eq!(json["matched_rules"][0]["pattern"], "refs/heads/*");
     assert_eq!(json["profile_results"][0]["state"], "certified");
+}
+
+#[test]
+fn authorize_legacy_unsigned_record_is_treated_as_uncertified() {
+    let repo = TempDir::new().unwrap();
+    let (_key_dir, _public_key_path, public_key) = generate_ssh_signer();
+    init_git_repo(&repo);
+    write_repo_file(
+        &repo,
+        ".repocert/config.toml",
+        &format!(
+            r#"
+schema_version = 1
+
+[checks.test]
+argv = ["sh", "-c", "exit 0"]
+
+[profiles.release]
+checks = ["test"]
+certify = true
+default = true
+
+[[protected_refs]]
+pattern = "refs/heads/main"
+profile = "release"
+
+[certification]
+mode = "ssh-signed"
+
+[[certification.trusted_signer]]
+name = "test"
+public_key = "{public_key}"
+"#
+        ),
+    );
+    commit_all(&repo, "initial");
+    let head = head_commit(&repo);
+
+    let store = CertificationStore::open(repo.path()).unwrap();
+    let path = store.root_dir().join(&head).join("72656c65617365.json");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &path,
+        serde_json::to_vec_pretty(&CertificationPayload {
+            key: CertificationKey {
+                commit: head.clone(),
+                profile: "release".to_string(),
+            },
+            contract_fingerprint: repocert::certification::ContractFingerprint::from_bytes([7; 32]),
+        })
+        .unwrap(),
+    )
+    .unwrap();
+
+    let output = run_authorize(
+        &[
+            "1111111111111111111111111111111111111111",
+            &head,
+            "refs/heads/main",
+            "--format",
+            "json",
+        ],
+        repo.path(),
+    );
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["ok"], false);
+    assert_eq!(json["error"], Value::Null);
+    assert_eq!(json["allowed"], false);
+    assert_eq!(json["profile_results"][0]["state"], "uncertified");
 }
 
 #[test]

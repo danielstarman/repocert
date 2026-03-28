@@ -21,4 +21,6 @@ pub use types::{
     ContractFingerprint,
 };
 
-pub(crate) use state::{ProfileCertificationState, inspect_profile_certification};
+pub(crate) use state::{
+    ProfileCertificationError, ProfileCertificationState, inspect_profile_certification,
+};

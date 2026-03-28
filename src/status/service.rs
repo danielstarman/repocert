@@ -1,6 +1,6 @@
 use crate::certification::{
-    CertificationStore, ProfileCertificationState, compute_contract_fingerprint,
-    inspect_profile_certification,
+    CertificationStore, ProfileCertificationError, ProfileCertificationState,
+    compute_contract_fingerprint, inspect_profile_certification,
 };
 use crate::config::load_contract;
 use crate::contract::matches_pattern;
@@ -78,6 +78,7 @@ pub fn run_status(options: StatusOptions) -> Result<StatusReport, StatusError> {
                 .expect("certification-eligible profiles require certification config");
             inspect_profile_certification(
                 &store,
+                &loaded.paths.repo_root,
                 &commit,
                 profile,
                 &contract_fingerprint,
@@ -90,9 +91,15 @@ pub fn run_status(options: StatusOptions) -> Result<StatusReport, StatusError> {
                 other_certified_commits: inspection.other_certified_commits,
                 recorded_fingerprint: inspection.recorded_fingerprint,
             })
-            .map_err(|error| StatusError::Storage {
-                paths: loaded.paths.clone(),
-                error,
+            .map_err(|error| match error {
+                ProfileCertificationError::Storage(error) => StatusError::Storage {
+                    paths: loaded.paths.clone(),
+                    error,
+                },
+                ProfileCertificationError::GitCommit(error) => StatusError::GitCommit {
+                    paths: loaded.paths.clone(),
+                    error,
+                },
             })
         })
         .collect::<Result<Vec<_>, _>>()?;

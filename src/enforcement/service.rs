@@ -1,8 +1,8 @@
 use std::collections::BTreeSet;
 
 use crate::certification::{
-    CertificationStore, ProfileCertificationState, compute_contract_fingerprint,
-    inspect_profile_certification,
+    CertificationStore, ProfileCertificationError, ProfileCertificationState,
+    compute_contract_fingerprint, inspect_profile_certification,
 };
 use crate::config::load_contract;
 use crate::contract::matches_pattern;
@@ -75,6 +75,7 @@ pub fn authorize_ref_update(options: AuthorizeOptions) -> Result<AuthorizeReport
                 .expect("certification-eligible profiles require certification config");
             inspect_profile_certification(
                 &store,
+                &loaded.paths.repo_root,
                 &target_commit,
                 profile,
                 &contract_fingerprint,
@@ -85,9 +86,15 @@ pub fn authorize_ref_update(options: AuthorizeOptions) -> Result<AuthorizeReport
                 state: map_profile_state(inspection.state),
                 signer_name: inspection.signer_name,
             })
-            .map_err(|error| AuthorizeError::Storage {
-                paths: loaded.paths.clone(),
-                error,
+            .map_err(|error| match error {
+                ProfileCertificationError::Storage(error) => AuthorizeError::Storage {
+                    paths: loaded.paths.clone(),
+                    error,
+                },
+                ProfileCertificationError::GitCommit(error) => AuthorizeError::GitCommit {
+                    paths: loaded.paths.clone(),
+                    error,
+                },
             })
         })
         .collect::<Result<Vec<_>, _>>()?;

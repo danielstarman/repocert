@@ -1,7 +1,10 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use repocert::certification::{CertificationKey, CertificationPayload, CertificationStore};
+use repocert::certification::{
+    CertificationKey, CertificationPayload, CertificationStore, ContractFingerprint,
+    sign_payload_with_ssh,
+};
 use serde_json::Value;
 use tempfile::TempDir;
 
@@ -479,7 +482,7 @@ profile = "release"
 }
 
 #[test]
-fn status_legacy_unsigned_record_returns_storage_error() {
+fn status_legacy_unsigned_record_is_ignored_as_uncertified() {
     let repo = TempDir::new().unwrap();
     let (_key_dir, _public_key_path, public_key) = generate_ssh_signer();
     init_git_repo(&repo);
@@ -528,9 +531,75 @@ public_key = "{public_key}"
 
     let output = run_status(&["--format", "json"], repo.path());
 
-    assert_eq!(output.status.code(), Some(1));
+    assert!(output.status.success());
     let json: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(json["error"]["category"], "storage");
+    assert_eq!(json["ok"], true);
+    assert_eq!(json["error"], Value::Null);
+    assert_eq!(json["profile_results"][0]["state"], "uncertified");
+}
+
+#[test]
+fn status_orphaned_other_commit_record_is_ignored() {
+    let repo = TempDir::new().unwrap();
+    let (_key_dir, public_key_path, public_key) = generate_ssh_signer();
+    init_git_repo(&repo);
+    write_repo_file(
+        &repo,
+        ".repocert/config.toml",
+        &format!(
+            r#"
+schema_version = 1
+
+[checks.test]
+argv = ["sh", "-c", "exit 0"]
+
+[profiles.default]
+checks = ["test"]
+certify = true
+default = true
+
+[certification]
+mode = "ssh-signed"
+
+[[certification.trusted_signer]]
+name = "test"
+public_key = "{public_key}"
+"#
+        ),
+    );
+    commit_all(&repo, "initial");
+
+    let orphan_commit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    let store = CertificationStore::open(repo.path()).unwrap();
+    let path = store
+        .root_dir()
+        .join(orphan_commit)
+        .join("64656661756c74.json");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let record = sign_payload_with_ssh(
+        &public_key_path,
+        &CertificationPayload {
+            key: CertificationKey {
+                commit: orphan_commit.to_string(),
+                profile: "default".to_string(),
+            },
+            contract_fingerprint: ContractFingerprint::from_bytes([7; 32]),
+        },
+    )
+    .unwrap();
+    std::fs::write(path, serde_json::to_vec_pretty(&record).unwrap()).unwrap();
+
+    let output = run_status(&["--format", "json"], repo.path());
+
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["ok"], true);
+    assert_eq!(json["error"], Value::Null);
+    assert_eq!(json["profile_results"][0]["state"], "uncertified");
+    assert_eq!(
+        json["profile_results"][0]["other_certified_commits"],
+        serde_json::json!([])
+    );
 }
 
 #[test]
