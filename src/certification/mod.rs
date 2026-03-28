@@ -1,5 +1,6 @@
 mod error;
 mod fingerprint;
+mod hex;
 mod signing;
 mod state;
 mod store;

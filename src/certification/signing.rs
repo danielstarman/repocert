@@ -4,6 +4,7 @@ use std::process::{Command, Output, Stdio};
 
 use tempfile::{NamedTempFile, TempDir};
 
+use super::hex;
 use super::{CertificationBackend, CertificationPayload, CertificationRecord, SigningError};
 use crate::config::TrustedSigner;
 
@@ -19,7 +20,7 @@ pub fn encode_payload_for_signing(payload: &CertificationPayload) -> Vec<u8> {
     encoded.push_str(&payload.key.commit);
     encoded.push('\n');
     encoded.push_str("profile_hex=");
-    encoded.push_str(&hex_encode(payload.key.profile.as_bytes()));
+    encoded.push_str(&hex::encode(payload.key.profile.as_bytes()));
     encoded.push('\n');
     encoded.push_str("contract_fingerprint=");
     encoded.push_str(&payload.contract_fingerprint.to_hex());
@@ -216,23 +217,6 @@ fn command_message(output: &std::process::Output) -> String {
         String::from_utf8_lossy(&output.stdout).trim().to_string()
     } else {
         stderr
-    }
-}
-
-fn hex_encode(bytes: &[u8]) -> String {
-    let mut encoded = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        encoded.push(nibble_to_hex(byte >> 4));
-        encoded.push(nibble_to_hex(byte & 0x0f));
-    }
-    encoded
-}
-
-fn nibble_to_hex(value: u8) -> char {
-    match value {
-        0..=9 => char::from(b'0' + value),
-        10..=15 => char::from(b'a' + (value - 10)),
-        _ => unreachable!("nibbles must stay within 0..=15"),
     }
 }
 
